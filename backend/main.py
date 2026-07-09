@@ -51,9 +51,11 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------
+# compare MUST be registered before profile: /players/compare would otherwise
+# be matched by profile's /{player_id} path parameter.
 app.include_router(search.router,  prefix="/players", tags=["Players"])
-app.include_router(profile.router, prefix="/players", tags=["Players"])
 app.include_router(compare.router, prefix="/players", tags=["Players"])
+app.include_router(profile.router, prefix="/players", tags=["Players"])
 app.include_router(chat.router,    prefix="/chat",    tags=["Chat"])
 
 
