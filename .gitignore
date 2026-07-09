@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.idea/
+downloaded_files/
+*.egg-info/
+dist/
+.venv/
+venv/
+node_modules/
+frontend/dist/
