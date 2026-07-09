@@ -45,7 +45,7 @@ The script downloads three `.rds` files from GitHub (~5 MB total) and outputs
 
 | Column | Source | Notes |
 |---|---|---|
-| `player_id` | FBref | Extracted from FBref player URL hash (e.g. `39168d69`) |
+| `player_id` | FBref | Extracted from FBref player URL hash (e.g. `39168d69`). **Unique per row** — mid-season transfers are aggregated into one season-total row. |
 | `name` | FBref | Real player name |
 | `position` | FBref | Normalised: `GK`, `DEF`, `MID`, `FWD`. FBref's primary position tag used when a player has multiple (e.g. `MF,FW` → `MID`) |
 | `age` | FBref | **Real age** as of the start of the 2021-22 season |
@@ -68,7 +68,9 @@ The script downloads three `.rds` files from GitHub (~5 MB total) and outputs
 2. Filter: players with `minutes_played >= 90` only (removes statistical noise from cameo appearances)
 3. Position normalisation: FBref primary position tag mapped to `GK / DEF / MID / FWD`
 4. Numeric coercion: all metric columns cast to float/int; remaining NaN filled with `0`
-5. Merge: shots from `big5_player_shooting.rds`, passes from `big5_player_passing.rds`, joined on player name
+5. **Strong 4-key merge**: shots (from `big5_player_shooting.rds`) and passes (from `big5_player_passing.rds`) are merged on `Season_End_Year + Squad + Comp + Player` — not on player name alone — to avoid misassignment for duplicate names or transferred players
+6. **Transfer aggregation**: players who transferred mid-season appear once per club in FBref. These rows are aggregated into a single season-total row: counting stats (goals, assists, shots, passes, xg, xa, minutes) are **summed**; the club/league where the player had the most minutes is used as the canonical value. This ensures `player_id` is unique in the final CSV.
+7. Drop rows with `age == 0` (FBref anomaly entries where birth year is missing)
 
 ---
 
@@ -102,20 +104,12 @@ few passes into dangerous areas). This is not a data gap — it reflects real
 playing data.
 
 #### Age edge cases
-A small number of players have `age == 0` in the FBref source (data entry
-anomalies). These are not filtered out to preserve row count; downstream code
-should treat `age == 0` as unknown.
+Rows with `age == 0` in the FBref source (data entry anomalies where a player's
+birth year is missing) are **filtered out** during the build step. No `age == 0`
+rows exist in the final CSV.
 
 #### Shots and passes join quality
-Shots and passes are merged on player name from separate FBref tables. In cases
-where a player appears for multiple clubs (mid-season transfer), the first
-occurrence is used. This may slightly under-count shots/passes for transferred
-players.
-
-#### Players with duplicate `player_id`
-Some players appear twice (transfer within season, e.g. Jan window). The CSV
-retains both rows. The backend `data_service` should handle this (e.g. take the
-row with more minutes, or the most recent club).
+Shots and passes are merged on `Season_End_Year + Squad + Comp + Player` (4-key join) from separate FBref tables. This is a strong join that correctly handles duplicate player names and mid-season transfers. After the join, transferred players are aggregated before writing the final CSV.
 
 ---
 

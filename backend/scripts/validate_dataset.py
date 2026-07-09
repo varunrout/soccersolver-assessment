@@ -133,12 +133,13 @@ def run_validation() -> bool:
         f"std per position: {mv_std_by_pos.to_dict()}",
     )
 
-    # ---- player_id uniqueness (warn if duplicates — players can appear for
-    #      multiple clubs in one season after a transfer) ----
+    # ---- player_id uniqueness — hard failure (required for /players/{id} routing) ----
     dup_ids = df["player_id"].duplicated().sum()
-    if dup_ids > 0:
-        print(f"  [WARN] player_id has {dup_ids} duplicates "
-              f"(expected — mid-season transfers; handled in data_service)")
+    all_pass &= check(
+        "player_id is unique (required for /players/{id} routing)",
+        dup_ids == 0,
+        f"{dup_ids} duplicates" if dup_ids else "all unique",
+    )
 
     # ---- Summary ----
     print()

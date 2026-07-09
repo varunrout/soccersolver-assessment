@@ -183,41 +183,67 @@ def main():
 
     # ------------------------------------------------------------------
     # 4. Build core dataframe from standard stats
+    #    Retain Season_End_Year, Squad, Comp, Player for later merges.
     # ------------------------------------------------------------------
-    merge_keys = ["Season_End_Year", "Squad", "Player", "Pos"]
-
     core = std[[
-        "player_id", "Player", "Pos", "Age", "Squad", "Comp",
+        "Season_End_Year", "Squad", "Comp", "Player",
+        "player_id", "Pos", "Age",
         "Min_Playing", "Gls", "Ast",
         "xG_Expected", "xAG_Expected",
         "Mins_Per_90_Playing",
     ]].copy()
 
-    core.columns = [
-        "player_id", "name", "_pos_raw", "age", "club", "league",
-        "minutes_played", "goals", "assists",
-        "xg", "xa",
-        "mins_per_90",
-    ]
+    core.rename(columns={
+        "Player":            "name",
+        "Pos":               "_pos_raw",
+        "Age":               "age",
+        "Squad":             "club",
+        "Comp":              "league",
+        "Min_Playing":       "minutes_played",
+        "Gls":               "goals",
+        "Ast":               "assists",
+        "xG_Expected":       "xg",
+        "xAG_Expected":      "xa",
+        "Mins_Per_90_Playing": "mins_per_90",
+    }, inplace=True)
+
+    # Re-expose merge-key aliases so the 4-key join below works
+    # (Season_End_Year already present; Squad→club, Comp→league, Player→name)
+    # We add them back as aliases just for the merge, then drop after.
+    core["_Squad"]  = core["club"]
+    core["_Comp"]   = core["league"]
+    core["_Player"] = core["name"]
+    MERGE_KEYS = ["Season_End_Year", "_Squad", "_Comp", "_Player"]
 
     # ------------------------------------------------------------------
-    # 5. Merge shots from shooting stats
+    # 5. Merge shots from shooting stats — strong 4-key join
     # ------------------------------------------------------------------
-    shoot_slim = shoot[merge_keys + ["Sh_Standard"]].copy()
-    shoot_slim.columns = ["season", "club_s", "name", "_pos_raw", "shots"]
-    shoot_slim = shoot_slim.drop(columns=["season", "club_s", "_pos_raw"])
-    # Merge on name only (Squad may differ slightly); drop duplicates first
-    shoot_slim = shoot_slim.drop_duplicates(subset=["name"], keep="first")
-    core = core.merge(shoot_slim, on="name", how="left")
+    MERGE_KEYS = ["Season_End_Year", "_Squad", "_Comp", "_Player"]
+
+    shoot_slim = (
+        df_shoot[df_shoot["Season_End_Year"] == TARGET_SEASON]
+        [["Season_End_Year", "Squad", "Comp", "Player", "Sh_Standard"]]
+        .rename(columns={"Squad": "_Squad", "Comp": "_Comp",
+                         "Player": "_Player", "Sh_Standard": "shots"})
+        .drop_duplicates(subset=MERGE_KEYS)
+    )
+    core = core.merge(shoot_slim, on=MERGE_KEYS, how="left")
 
     # ------------------------------------------------------------------
-    # 6. Merge total passes attempted from passing stats
+    # 6. Merge total passes attempted from passing stats — strong 4-key join
     # ------------------------------------------------------------------
-    pass_slim = pas[merge_keys + ["Att_Total"]].copy()
-    pass_slim.columns = ["season", "club_p", "name", "_pos_raw", "passes"]
-    pass_slim = pass_slim.drop(columns=["season", "club_p", "_pos_raw"])
-    pass_slim = pass_slim.drop_duplicates(subset=["name"], keep="first")
-    core = core.merge(pass_slim, on="name", how="left")
+    pass_slim = (
+        df_pass[df_pass["Season_End_Year"] == TARGET_SEASON]
+        [["Season_End_Year", "Squad", "Comp", "Player", "Att_Total"]]
+        .rename(columns={"Squad": "_Squad", "Comp": "_Comp",
+                         "Player": "_Player", "Att_Total": "passes"})
+        .drop_duplicates(subset=MERGE_KEYS)
+    )
+    core = core.merge(pass_slim, on=MERGE_KEYS, how="left")
+
+    # Drop merge-key aliases and Season_End_Year — no longer needed
+    core.drop(columns=["Season_End_Year", "_Squad", "_Comp", "_Player"],
+              inplace=True)
 
     # ------------------------------------------------------------------
     # 7. Normalise position
@@ -263,7 +289,49 @@ def main():
     log.info("Dropped %d rows with age=0 (FBref anomalies)", before_age - len(core))
 
     # ------------------------------------------------------------------
-    # 11. Compute market value estimate (deterministic tier + league mult)
+    # 11. Aggregate mid-season transfers into one row per player
+    #
+    #     Players who transferred mid-season appear once per club in the
+    #     FBref source (same player_id, different club/league rows).
+    #     Strategy:
+    #       - Sum all counting stats across clubs (goals, assists, etc.)
+    #       - Use the club/league where the player had the most minutes
+    #         as the canonical club/league for that season
+    #       - Keep name, position, age from any row (same player)
+    #       - Recompute mins_per_90 from aggregated minutes
+    # ------------------------------------------------------------------
+    before_agg = len(core)
+    dups = core["player_id"].duplicated(keep=False).sum()
+    if dups > 0:
+        log.info("Aggregating %d transfer rows into season totals...", dups)
+
+        # Primary club = club with most minutes
+        primary = (
+            core.sort_values("minutes_played", ascending=False)
+            .drop_duplicates(subset=["player_id"], keep="first")
+            [["player_id", "name", "position", "age", "club", "league"]]
+        )
+
+        agg_stats = core.groupby("player_id", as_index=False).agg(
+            goals=("goals", "sum"),
+            assists=("assists", "sum"),
+            shots=("shots", "sum"),
+            passes=("passes", "sum"),
+            xg=("xg", "sum"),
+            xa=("xa", "sum"),
+            minutes_played=("minutes_played", "sum"),
+        )
+        agg_stats["xg"] = agg_stats["xg"].round(2)
+        agg_stats["xa"] = agg_stats["xa"].round(2)
+        agg_stats["mins_per_90"] = agg_stats["minutes_played"] / 90
+
+        core = primary.merge(agg_stats, on="player_id")
+        log.info("Aggregated %d rows -> %d unique players", before_agg, len(core))
+    else:
+        log.info("No mid-season transfer duplicates found.")
+
+    # ------------------------------------------------------------------
+    # 12. Compute market value estimate (deterministic tier + league mult)
     # ------------------------------------------------------------------
     log.info("Computing market value estimates...")
 
@@ -288,7 +356,7 @@ def main():
     )
 
     # ------------------------------------------------------------------
-    # 12. Drop helper column; reorder final columns
+    # 13. Drop helper column; reorder final columns
     # ------------------------------------------------------------------
     final_cols = [
         "player_id", "name", "position", "age", "club", "league",
@@ -298,7 +366,8 @@ def main():
     core = core[final_cols]
 
     # ------------------------------------------------------------------
-    # 13. Save
+    # 14. Save
+    # ------------------------------------------------------------------
     # ------------------------------------------------------------------
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     core.to_csv(OUTPUT_PATH, index=False)
@@ -328,8 +397,9 @@ def main():
              f"{core['market_value_eur'].max():,}")
     log.info("")
     log.info("Sample rows:")
-    print(core[["name","position","age","club","league","goals","assists",
-                "xg","xa","market_value_eur"]].head(8).to_string())
+    sample = core[["name","position","age","club","league","goals","assists",
+                   "xg","xa","market_value_eur"]].head(8)
+    print(sample.to_string().encode("ascii", errors="replace").decode("ascii"))
 
 
 if __name__ == "__main__":
