@@ -391,3 +391,83 @@ class TestRankPlayers:
         from services.stats_service import rank_players
         with pytest.raises(ValueError, match="Unknown metric"):
             rank_players(metric="fantasy_points")
+
+    # ── min_minutes behaviour ──────────────────────────────────────────────
+
+    def test_raw_metric_respects_min_minutes(self, tmp_path, monkeypatch):
+        """rank_players(metric='goals', min_minutes=1000) excludes low-minute players."""
+        rows = [
+            _row(player_id="high", goals=30, minutes_played=2700),
+            _row(player_id="low",  goals=25, minutes_played=500),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players(metric="goals", min_minutes=1000)
+        ids = [r.player_id for r in results]
+        assert "high" in ids
+        assert "low" not in ids
+
+    def test_raw_metric_min_minutes_zero_includes_all(self, tmp_path, monkeypatch):
+        """min_minutes=0 with a raw metric should include all players."""
+        rows = [
+            _row(player_id="active", goals=10, minutes_played=2000),
+            _row(player_id="bench",  goals=1,  minutes_played=0),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players(metric="goals", min_minutes=0)
+        ids = [r.player_id for r in results]
+        assert "active" in ids
+        assert "bench" in ids
+
+    def test_per90_metric_always_excludes_zero_minutes(self, tmp_path, monkeypatch):
+        """Even with min_minutes=0, per-90 ranking never includes zero-minute players."""
+        rows = [
+            _row(player_id="active", goals=10, minutes_played=900),
+            _row(player_id="bench",  goals=99, minutes_played=0),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players(metric="goals_p90", min_minutes=0)
+        ids = [r.player_id for r in results]
+        assert "active" in ids
+        assert "bench" not in ids  # zero minutes excluded regardless
+
+    def test_market_value_respects_min_minutes(self, tmp_path, monkeypatch):
+        """Non-goals raw metric also respects min_minutes."""
+        rows = [
+            _row(player_id="starter", market_value_eur=50000000, minutes_played=2000),
+            _row(player_id="unused",  market_value_eur=40000000, minutes_played=200),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players(metric="market_value_eur", min_minutes=1000)
+        ids = [r.player_id for r in results]
+        assert "starter" in ids
+        assert "unused" not in ids
+
+    # ── _per90 alias tests ─────────────────────────────────────────────────
+
+    def test_per90_alias_same_result_as_p90(self):
+        """goals_per90 and goals_p90 should return identical ranked lists."""
+        from services.stats_service import rank_players
+        p90    = rank_players(metric="goals_p90",    league="Premier League", limit=10)
+        per90  = rank_players(metric="goals_per90",  league="Premier League", limit=10)
+        assert [r.player_id for r in p90] == [r.player_id for r in per90]
+
+    def test_all_per90_aliases_accepted(self):
+        """All six _per90 aliases are valid metric names."""
+        from services.stats_service import rank_players
+        for alias in ["goals_per90", "assists_per90", "shots_per90",
+                      "passes_per90", "xg_per90", "xa_per90"]:
+            results = rank_players(metric=alias, league="Premier League", limit=3)
+            assert isinstance(results, list), f"{alias} did not return a list"
+
+    def test_per90_alias_label_matches_p90(self):
+        """Aliases share the same human label as their _p90 counterpart."""
+        from services.stats_service import rank_players
+        p90   = rank_players(metric="xg_p90",   league="La Liga", limit=1)
+        per90 = rank_players(metric="xg_per90", league="La Liga", limit=1)
+        if p90 and per90:
+            assert p90[0].metric_label == per90[0].metric_label
+

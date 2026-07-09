@@ -26,13 +26,20 @@ P90_ROUND = 3  # decimal places for per-90 values
 # Metric registry ─ keys are the canonical names accepted by public functions.
 # Value: (raw_column, human_label, is_per90)
 _METRIC_REGISTRY: dict[str, tuple[str, str, bool]] = {
-    # per-90 names
+    # per-90 names  (canonical _p90 form)
     "goals_p90":   ("goals",   "Goals per 90",   True),
     "assists_p90": ("assists", "Assists per 90",  True),
     "shots_p90":   ("shots",   "Shots per 90",    True),
     "passes_p90":  ("passes",  "Passes per 90",   True),
     "xg_p90":      ("xg",      "xG per 90",       True),
     "xa_p90":      ("xa",      "xA per 90",       True),
+    # _per90 aliases — same output as _p90 equivalents
+    "goals_per90":   ("goals",   "Goals per 90",   True),
+    "assists_per90": ("assists", "Assists per 90",  True),
+    "shots_per90":   ("shots",   "Shots per 90",    True),
+    "passes_per90":  ("passes",  "Passes per 90",   True),
+    "xg_per90":      ("xg",      "xG per 90",       True),
+    "xa_per90":      ("xa",      "xA per 90",       True),
     # raw aliases (no per-90 normalisation)
     "goals":       ("goals",   "Goals",           False),
     "assists":     ("assists", "Assists",          False),
@@ -260,12 +267,14 @@ def rank_players(
     """
     Return the top players sorted descending by the requested metric.
 
-    metric    — any key from SUPPORTED_METRICS (per-90 or raw alias)
+    metric    — any key from SUPPORTED_METRICS (per-90, _per90 alias, or raw)
     position  — exact position filter (case-insensitive), optional
     league    — exact league filter (case-insensitive), optional
     min_age   — inclusive lower bound on player age, optional
     max_age   — inclusive upper bound on player age, optional
-    min_minutes — minimum minutes_played for per-90 metrics (default 300)
+    min_minutes — minimum minutes_played; applies to ALL metrics (default 300).
+                  Per-90 metrics additionally enforce at least 1 minute to avoid
+                  division by zero regardless of this value.
     limit     — number of results; clamped to MAX_RANK_LIMIT (50)
 
     Raises ValueError for unknown metric names.
@@ -277,7 +286,10 @@ def rank_players(
         )
 
     _col, label, is_per90 = _METRIC_REGISTRY[metric]
-    effective_min_minutes = min_minutes if is_per90 else 0
+    # min_minutes applies to all metrics.
+    # For per-90 metrics we additionally enforce at least 1 minute so we
+    # never divide by zero; for raw metrics we honour whatever the caller passed.
+    effective_min_minutes = max(1, min_minutes) if is_per90 else max(0, min_minutes)
     limit = min(max(1, limit), MAX_RANK_LIMIT)
 
     players = get_players(
