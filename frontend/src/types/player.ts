@@ -1,24 +1,14 @@
 export interface PlayerSummary {
   player_id: string
   name: string
-  position: string
+  position: 'GK' | 'DEF' | 'MID' | 'FWD'
   club: string
   league: string
-  age: number
   market_value_eur: number
 }
 
-export interface PlayerPercentiles {
-  goals: number
-  assists: number
-  minutes_played: number
-  shots: number
-  passes: number
-  xg: number
-  xa: number
-}
-
 export interface PlayerDetail extends PlayerSummary {
+  age: number
   goals: number
   assists: number
   minutes_played: number
@@ -28,33 +18,46 @@ export interface PlayerDetail extends PlayerSummary {
   xa: number
 }
 
-export interface PlayerDetailWithPercentiles {
-  player: PlayerDetail
-  percentiles: PlayerPercentiles
-  league_rank: number | null
-  similar_players: PlayerSummary[]
+export interface PlayerPercentiles {
+  player_id: string
+  /** Percentile rank 0–100 per per-90 metric within position+league peer group. null when peer group < 5. */
+  metrics: Record<string, number | null>
+}
+
+export interface PlayerDetailWithPercentiles extends PlayerDetail {
+  percentiles: PlayerPercentiles | null
+}
+
+export interface RankedPlayer {
+  rank: number
+  player_id: string
+  name: string
+  club: string
+  league: string
+  position: string
+  metric_value: number
+  metric_label: string
 }
 
 export interface MetricComparison {
-  metric: string
-  player_a: number
-  player_b: number
-  percentile_a: number
-  percentile_b: number
+  metric_name: string
+  label: string
+  value_a: number
+  value_b: number
   winner: 'a' | 'b' | 'draw'
 }
 
 export interface MarketContext {
-  player_a_value: number
-  player_b_value: number
-  value_ratio: number
-  better_value: 'a' | 'b' | 'equal'
+  value_a: number
+  value_b: number
+  league_avg_a: number | null
+  league_avg_b: number | null
 }
 
 export interface ComparisonResult {
   player_a: PlayerDetail
   player_b: PlayerDetail
   metrics: MetricComparison[]
-  overall_winner: 'a' | 'b' | 'draw'
   market_context: MarketContext
 }
+

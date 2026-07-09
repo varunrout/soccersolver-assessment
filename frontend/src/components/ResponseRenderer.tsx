@@ -1,3 +1,4 @@
+import ComparisonChart from './ComparisonChart'
 import type { ResponseUnion } from '../types/chat'
 
 interface Props {
@@ -42,11 +43,6 @@ export default function ResponseRenderer({ response }: Props) {
       )
 
     case 'comparison':
-      return (
-        <div className="placeholder-card">
-          <strong>{response.title}</strong>
-          <p className="placeholder-text">[Comparison chart — Issue #11]</p>
-        </div>
-      )
+      return <ComparisonChart result={response.result} />
   }
 }

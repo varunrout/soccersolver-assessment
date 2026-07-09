@@ -19,7 +19,6 @@ export default function PlayerCard({ player, onClick }: Props) {
         <span>{player.league}</span>
       </div>
       <div className="player-card__stats">
-        <span>Age {player.age}</span>
         <span>€{FMT.format(player.market_value_eur)}</span>
       </div>
     </div>

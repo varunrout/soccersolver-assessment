@@ -1,8 +1,15 @@
+import type { ComparisonResult } from './player'
+
 export interface ParsedIntent {
-  intent: string
-  entities: Record<string, string | number | null>
+  intent: 'ranking' | 'lookup' | 'comparison' | 'unknown'
+  players: string[]
+  metric: string | null
+  league: string | null
+  position: string | null
+  min_age: number | null
+  max_age: number | null
+  limit: number
   raw_query: string
-  confidence: number
 }
 
 export interface TextResponse {
@@ -14,35 +21,33 @@ export interface TextResponse {
 export interface ChartDataset {
   label: string
   data: number[]
+  color?: string
 }
 
 export interface ChartResponse {
   type: 'chart'
+  title: string
   chart_type: 'bar' | 'radar' | 'line'
   labels: string[]
   datasets: ChartDataset[]
-  title: string
 }
 
 export interface TableResponse {
   type: 'table'
+  title: string
   columns: string[]
   rows: Array<Record<string, string | number | null>>
-  title: string
 }
 
 export interface ComparisonResponse {
   type: 'comparison'
-  title: string
-  // full ComparisonResult shape comes from player.ts — imported in components
-  data: unknown
+  result: ComparisonResult
 }
 
 export type ResponseUnion = TextResponse | ChartResponse | TableResponse | ComparisonResponse
 
 export interface ChatResponse {
   response: ResponseUnion
-  intent: ParsedIntent | null
 }
 
 export interface ChatMessage {
@@ -52,3 +57,4 @@ export interface ChatMessage {
   response?: ResponseUnion
   timestamp: Date
 }
+

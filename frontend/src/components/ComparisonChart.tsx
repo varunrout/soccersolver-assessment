@@ -16,9 +16,9 @@ interface Props {
 
 export default function ComparisonChart({ result }: Props) {
   const data = result.metrics.map((m) => ({
-    metric: m.metric,
-    [result.player_a.name]: m.player_a,
-    [result.player_b.name]: m.player_b,
+    metric: m.label,
+    [result.player_a.name]: m.value_a,
+    [result.player_b.name]: m.value_b,
   }))
 
   return (
