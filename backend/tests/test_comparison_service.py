@@ -128,16 +128,16 @@ class TestComparePlayers:
             assert m.winner in ("a", "b", "draw")
 
     def test_winner_consistent_with_values(self):
-        from services.comparison_service import compare_players
+        from services.comparison_service import compare_players, DRAW_TOLERANCE
         result = compare_players(SALAH_ID, KANE_ID)
         assert result is not None
         for m in result.metrics:
-            if m.value_a > m.value_b:
-                assert m.winner == "a"
-            elif m.value_b > m.value_a:
-                assert m.winner == "b"
-            else:
+            if abs(m.value_a - m.value_b) <= DRAW_TOLERANCE:
                 assert m.winner == "draw"
+            elif m.value_a > m.value_b:
+                assert m.winner == "a"
+            else:
+                assert m.winner == "b"
 
     def test_metric_values_non_negative(self):
         from services.comparison_service import compare_players
@@ -307,26 +307,49 @@ class TestMarketContext:
 
 
 # ---------------------------------------------------------------------------
-# _metric_winner helper
+# _metric_winner helper — tolerance behaviour
 # ---------------------------------------------------------------------------
 
 class TestMetricWinner:
 
-    def test_a_wins(self):
+    def test_a_wins_clear_margin(self):
         from services.comparison_service import _metric_winner
-        assert _metric_winner(0.6, 0.4) == "a"
+        assert _metric_winner(0.47, 0.45) == "a"
 
-    def test_b_wins(self):
+    def test_b_wins_clear_margin(self):
         from services.comparison_service import _metric_winner
-        assert _metric_winner(0.3, 0.5) == "b"
+        assert _metric_winner(0.45, 0.47) == "b"
 
-    def test_draw(self):
+    def test_exact_equality_is_draw(self):
         from services.comparison_service import _metric_winner
         assert _metric_winner(0.5, 0.5) == "draw"
 
-    def test_zero_both(self):
+    def test_zero_both_is_draw(self):
         from services.comparison_service import _metric_winner
         assert _metric_winner(0.0, 0.0) == "draw"
+
+    def test_difference_below_tolerance_is_draw(self):
+        # |0.455 - 0.450| = 0.005 < 0.01 → draw
+        from services.comparison_service import _metric_winner
+        assert _metric_winner(0.455, 0.450) == "draw"
+        assert _metric_winner(0.450, 0.455) == "draw"
+
+    def test_difference_exactly_tolerance_is_draw(self):
+        # 0.46 - 0.45 = 0.010000000000000009 in IEEE 754, which rounds to exactly
+        # 0.01 at 10dp → draw (this is the spec's intended boundary case).
+        from services.comparison_service import _metric_winner
+        assert _metric_winner(0.46, 0.45) == "draw"
+        assert _metric_winner(0.45, 0.46) == "draw"
+
+    def test_difference_above_tolerance_returns_winner(self):
+        # |0.47 - 0.45| = 0.02 > 0.01 → not draw
+        from services.comparison_service import _metric_winner
+        assert _metric_winner(0.47, 0.45) == "a"
+        assert _metric_winner(0.45, 0.47) == "b"
+
+    def test_reverse_near_equal_also_draw(self):
+        from services.comparison_service import _metric_winner
+        assert _metric_winner(0.450, 0.455) == "draw"
 
 
 # ---------------------------------------------------------------------------

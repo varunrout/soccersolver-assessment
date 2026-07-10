@@ -33,6 +33,9 @@ _COMPARISON_METRICS: list[tuple[str, str, str]] = [
     ("xa_p90",      "xa",      "xA per 90"),
 ]
 
+# Differences within this tolerance are treated as a draw.
+DRAW_TOLERANCE = 0.01
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,12 +43,18 @@ _COMPARISON_METRICS: list[tuple[str, str, str]] = [
 
 
 def _metric_winner(value_a: float, value_b: float) -> Literal["a", "b", "draw"]:
-    """Return which player wins a metric; 'draw' when values are equal."""
-    if value_a > value_b:
-        return "a"
-    if value_b > value_a:
-        return "b"
-    return "draw"
+    """
+    Return which player wins a metric.
+
+    Values within DRAW_TOLERANCE (0.01) of each other are a draw so that
+    negligible per-90 differences are not surfaced as meaningful wins.
+    The difference is rounded to 10 decimal places before comparison to avoid
+    IEEE 754 representation noise (e.g. 0.46 - 0.45 = 0.010000000000000009).
+    """
+    diff = round(abs(value_a - value_b), 10)
+    if diff <= DRAW_TOLERANCE:
+        return "draw"
+    return "a" if value_a > value_b else "b"
 
 
 def _safe_per90(player: PlayerDetail, col: str) -> float:
