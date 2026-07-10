@@ -360,9 +360,22 @@ class TestRankPlayers:
             p = get_player_by_id(r.player_id)
             assert p is not None and p.age >= 30
 
-    def test_raw_metric_alias(self):
+    def test_positional_metric_arg(self):
+        """metric can be passed positionally: rank_players('goals_p90', league=...)."""
         from services.stats_service import rank_players
-        results = rank_players(metric="goals", league="Premier League", limit=5)
+        results = rank_players("goals_p90", league="Premier League", position="FWD")
+        assert len(results) > 0
+
+    def test_keyword_metric_arg(self):
+        """metric can also be passed as keyword: rank_players(metric='goals_p90', ...)."""
+        from services.stats_service import rank_players
+        results = rank_players(metric="goals_p90", league="Premier League", position="FWD")
+        assert len(results) > 0
+
+    def test_raw_metric_alias(self):
+        """'goals' short name now ranks by goals_per90, not raw total."""
+        from services.stats_service import rank_players
+        results = rank_players("goals", league="Premier League", limit=5)
         assert len(results) > 0
         values = [r.metric_value for r in results]
         assert values == sorted(values, reverse=True)
@@ -395,27 +408,27 @@ class TestRankPlayers:
     # ── min_minutes behaviour ──────────────────────────────────────────────
 
     def test_raw_metric_respects_min_minutes(self, tmp_path, monkeypatch):
-        """rank_players(metric='goals', min_minutes=1000) excludes low-minute players."""
+        """rank_players('goals_total', min_minutes=1000) excludes low-minute players."""
         rows = [
             _row(player_id="high", goals=30, minutes_played=2700),
             _row(player_id="low",  goals=25, minutes_played=500),
         ]
         _patch_csv(monkeypatch, tmp_path, rows)
         from services.stats_service import rank_players
-        results = rank_players(metric="goals", min_minutes=1000)
+        results = rank_players("goals_total", min_minutes=1000)
         ids = [r.player_id for r in results]
         assert "high" in ids
         assert "low" not in ids
 
     def test_raw_metric_min_minutes_zero_includes_all(self, tmp_path, monkeypatch):
-        """min_minutes=0 with a raw metric should include all players."""
+        """min_minutes=0 with a raw _total metric should include even zero-minute players."""
         rows = [
             _row(player_id="active", goals=10, minutes_played=2000),
             _row(player_id="bench",  goals=1,  minutes_played=0),
         ]
         _patch_csv(monkeypatch, tmp_path, rows)
         from services.stats_service import rank_players
-        results = rank_players(metric="goals", min_minutes=0)
+        results = rank_players("goals_total", min_minutes=0)
         ids = [r.player_id for r in results]
         assert "active" in ids
         assert "bench" in ids
@@ -434,7 +447,7 @@ class TestRankPlayers:
         assert "bench" not in ids  # zero minutes excluded regardless
 
     def test_market_value_respects_min_minutes(self, tmp_path, monkeypatch):
-        """Non-goals raw metric also respects min_minutes."""
+        """market_value_eur (always-raw) also respects min_minutes."""
         rows = [
             _row(player_id="starter", market_value_eur=50000000, minutes_played=2000),
             _row(player_id="unused",  market_value_eur=40000000, minutes_played=200),
@@ -470,4 +483,63 @@ class TestRankPlayers:
         per90 = rank_players(metric="xg_per90", league="La Liga", limit=1)
         if p90 and per90:
             assert p90[0].metric_label == per90[0].metric_label
+
+    # ── short-name = per-90 semantics ──────────────────────────────────────
+
+    def test_goals_short_name_same_order_as_goals_p90(self):
+        """'goals' must give the same ranked order as 'goals_p90'."""
+        from services.stats_service import rank_players
+        by_short = rank_players("goals",    league="Premier League", limit=20)
+        by_p90   = rank_players("goals_p90", league="Premier League", limit=20)
+        assert [r.player_id for r in by_short] == [r.player_id for r in by_p90]
+
+    def test_assists_short_name_same_order_as_assists_p90(self):
+        """'assists' must give the same ranked order as 'assists_p90'."""
+        from services.stats_service import rank_players
+        by_short = rank_players("assists",    league="La Liga", limit=20)
+        by_p90   = rank_players("assists_p90", league="La Liga", limit=20)
+        assert [r.player_id for r in by_short] == [r.player_id for r in by_p90]
+
+    def test_goals_total_ranks_by_raw_season_total(self, tmp_path, monkeypatch):
+        """'goals_total' ranks by raw goals, not per-90."""
+        rows = [
+            # player A: more raw goals but fewer per-90 (many minutes)
+            _row(player_id="a", goals=30, minutes_played=3420),  # 30/3420*90 ≈ 0.789
+            # player B: fewer raw goals but higher per-90 (few minutes)
+            _row(player_id="b", goals=20, minutes_played=900),   # 20/900*90  ≈ 2.0
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        # by raw total: A (30) > B (20)
+        total_order = [r.player_id for r in rank_players("goals_total", limit=10)]
+        assert total_order.index("a") < total_order.index("b")
+        # by per-90: B (2.0) > A (0.789)
+        p90_order = [r.player_id for r in rank_players("goals_p90", limit=10)]
+        assert p90_order.index("b") < p90_order.index("a")
+
+    def test_goals_total_min_minutes_respected(self, tmp_path, monkeypatch):
+        """'goals_total' with min_minutes filters by minutes just like other raw metrics."""
+        rows = [
+            _row(player_id="starter", goals=15, minutes_played=2000),
+            _row(player_id="bench",   goals=12, minutes_played=100),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players("goals_total", min_minutes=500)
+        ids = [r.player_id for r in results]
+        assert "starter" in ids
+        assert "bench" not in ids
+
+    def test_goals_short_min_minutes_respected(self, tmp_path, monkeypatch):
+        """'goals' (per-90 alias) with min_minutes also filters correctly."""
+        rows = [
+            _row(player_id="starter", goals=10, minutes_played=2000),
+            _row(player_id="bench",   goals=5,  minutes_played=100),
+        ]
+        _patch_csv(monkeypatch, tmp_path, rows)
+        from services.stats_service import rank_players
+        results = rank_players("goals", min_minutes=500)
+        ids = [r.player_id for r in results]
+        assert "starter" in ids
+        assert "bench" not in ids
 

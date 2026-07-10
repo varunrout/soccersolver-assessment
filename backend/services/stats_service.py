@@ -26,30 +26,38 @@ P90_ROUND = 3  # decimal places for per-90 values
 # Metric registry ─ keys are the canonical names accepted by public functions.
 # Value: (raw_column, human_label, is_per90)
 _METRIC_REGISTRY: dict[str, tuple[str, str, bool]] = {
-    # per-90 names  (canonical _p90 form)
+    # canonical per-90 names  (_p90 suffix)
     "goals_p90":   ("goals",   "Goals per 90",   True),
     "assists_p90": ("assists", "Assists per 90",  True),
     "shots_p90":   ("shots",   "Shots per 90",    True),
     "passes_p90":  ("passes",  "Passes per 90",   True),
     "xg_p90":      ("xg",      "xG per 90",       True),
     "xa_p90":      ("xa",      "xA per 90",       True),
-    # _per90 aliases — same output as _p90 equivalents
+    # _per90 aliases — identical to _p90 equivalents
     "goals_per90":   ("goals",   "Goals per 90",   True),
     "assists_per90": ("assists", "Assists per 90",  True),
     "shots_per90":   ("shots",   "Shots per 90",    True),
     "passes_per90":  ("passes",  "Passes per 90",   True),
     "xg_per90":      ("xg",      "xG per 90",       True),
     "xa_per90":      ("xa",      "xA per 90",       True),
-    # raw aliases (no per-90 normalisation)
-    "goals":       ("goals",   "Goals",           False),
-    "assists":     ("assists", "Assists",          False),
-    "shots":       ("shots",   "Shots",            False),
-    "passes":      ("passes",  "Passes",           False),
-    "xg":          ("xg",      "xG",              False),
-    "xa":          ("xa",      "xA",              False),
-    "minutes_played": ("minutes_played", "Minutes played", False),
-    "age":         ("age",     "Age",             False),
-    "market_value_eur": ("market_value_eur", "Market value (€)", False),
+    # short names — treated as per-90 for ranking (same order as _p90)
+    "goals":   ("goals",   "Goals per 90",   True),
+    "assists": ("assists", "Assists per 90",  True),
+    "shots":   ("shots",   "Shots per 90",    True),
+    "passes":  ("passes",  "Passes per 90",   True),
+    "xg":      ("xg",      "xG per 90",       True),
+    "xa":      ("xa",      "xA per 90",       True),
+    # explicit raw season-total aliases
+    "goals_total":   ("goals",   "Goals",           False),
+    "assists_total": ("assists", "Assists",          False),
+    "shots_total":   ("shots",   "Shots",            False),
+    "passes_total":  ("passes",  "Passes",           False),
+    "xg_total":      ("xg",      "xG",              False),
+    "xa_total":      ("xa",      "xA",              False),
+    # always-raw fields
+    "minutes_played":    ("minutes_played",    "Minutes played",   False),
+    "age":               ("age",               "Age",              False),
+    "market_value_eur":  ("market_value_eur",  "Market value (€)", False),
 }
 
 SUPPORTED_METRICS: frozenset[str] = frozenset(_METRIC_REGISTRY)
@@ -255,8 +263,8 @@ def get_player_profile_stats(player_id: str) -> PlayerDetailWithPercentiles | No
 
 
 def rank_players(
-    *,
     metric: str,
+    *,
     position: str | None = None,
     league: str | None = None,
     min_age: int | None = None,
