@@ -247,3 +247,44 @@ class TestCompare:
         })
         # If routing were wrong, FastAPI would look up player_id="compare" → 404
         assert r.status_code == 200
+
+
+# ===========================================================================
+# POST /chat
+# ===========================================================================
+
+class TestChat:
+    def test_whitespace_only_message_rejected(self):
+        r = client.post("/chat", json={"message": " "})
+        assert r.status_code == 422
+
+    def test_message_over_max_length_rejected(self):
+        r = client.post("/chat", json={"message": "x" * 1001})
+        assert r.status_code == 422
+
+    def test_valid_message_accepted(self):
+        r = client.post("/chat", json={"message": "Compare Salah and Kane"})
+        assert r.status_code == 200
+
+    def test_trimmed_message_accepted(self):
+        r = client.post("/chat", json={"message": " Compare Salah and Kane "})
+        assert r.status_code == 200
+
+    def test_valid_response_has_type(self):
+        r = client.post("/chat", json={"message": "Top 5 forwards"})
+        assert r.status_code == 200
+        body = r.json()
+        assert "response" in body
+        assert "type" in body["response"]
+
+    def test_empty_message_rejected(self):
+        r = client.post("/chat", json={"message": ""})
+        assert r.status_code == 422
+
+    def test_missing_message_field_rejected(self):
+        r = client.post("/chat", json={})
+        assert r.status_code == 422
+
+    def test_message_at_max_length_accepted(self):
+        r = client.post("/chat", json={"message": "x" * 1000})
+        assert r.status_code == 200
