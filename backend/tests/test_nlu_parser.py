@@ -266,6 +266,28 @@ class TestLookup:
         result = _parse("Show me Mohamed Salah in the Premier League")
         assert result.league == "Premier League"
 
+    def test_show_me_salah_in_pl_name_only(self):
+        result = _parse("Show me Mohamed Salah in the Premier League")
+        assert result.intent == "player_lookup"
+        assert len(result.players) == 1
+        assert "salah" in result.players[0].lower()
+        assert "premier" not in result.players[0].lower()
+
+    def test_tell_me_about_kane_from_pl_name_only(self):
+        result = _parse("Tell me about Harry Kane from the Premier League")
+        assert result.intent == "player_lookup"
+        assert len(result.players) == 1
+        assert "kane" in result.players[0].lower()
+        assert "premier" not in result.players[0].lower()
+
+    def test_show_me_salah_by_xg_name_only(self):
+        result = _parse("Show me Mohamed Salah by xG")
+        assert result.intent == "player_lookup"
+        assert len(result.players) == 1
+        assert "salah" in result.players[0].lower()
+        # "by xG" must NOT be part of the player name
+        assert "xg" not in result.players[0].lower()
+
 
 # ===========================================================================
 # Unknown
@@ -403,3 +425,97 @@ class TestLLMIntegration:
             from nlu.parser import parse_query
             parse_query("Top 5 forwards by goals")
         mock_openai_cls.assert_not_called()
+
+
+# ===========================================================================
+# _validate_intent_result — shared post-validation
+# ===========================================================================
+
+class TestValidateIntentResult:
+
+    def test_unknown_without_clarification_gets_default(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "unknown"}
+        mock_client = self._make_mock_client(args)  # type: ignore[attr-defined]
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("some vague football question")
+        assert result.intent == "unknown"
+        assert result.clarification_message is not None
+        assert len(result.clarification_message) > 0
+
+    def _make_mock_client(self, arguments: dict):
+        mock_tool_call = MagicMock()
+        mock_tool_call.function.arguments = json.dumps(arguments)
+        mock_message = MagicMock()
+        mock_message.tool_calls = [mock_tool_call]
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        return mock_client
+
+    def test_comparison_one_player_becomes_unknown(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "comparison", "players": ["Salah"]}
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Compare Salah")
+        assert result.intent == "unknown"
+        assert "two" in result.clarification_message.lower() or "player" in result.clarification_message.lower()
+
+    def test_ranking_no_metric_becomes_unknown(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "ranking", "players": [], "position": "FWD", "league": "Premier League"}
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Top forwards in the Premier League")
+        assert result.intent == "unknown"
+        assert "metric" in result.clarification_message.lower() or "goals" in result.clarification_message.lower()
+
+    def test_lookup_no_player_becomes_unknown(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "player_lookup", "players": []}
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Show me a player")
+        assert result.intent == "unknown"
+        assert "player" in result.clarification_message.lower()
+
+    def test_valid_ranking_unchanged(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {
+            "intent": "ranking", "players": [], "metric": "goals",
+            "position": "FWD", "league": "Premier League", "limit": 5,
+        }
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Top 5 forwards in the PL by goals")
+        assert result.intent == "ranking"
+        assert result.metric == "goals"
+
+    def test_valid_comparison_unchanged(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "comparison", "players": ["Salah", "Kane"]}
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Compare Salah and Kane")
+        assert result.intent == "comparison"
+        assert len(result.players) == 2
+
+    def test_valid_lookup_unchanged(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
+        args = {"intent": "player_lookup", "players": ["Mohamed Salah"]}
+        mock_client = self._make_mock_client(args)
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query
+            result = parse_query("Show me Mohamed Salah")
+        assert result.intent == "player_lookup"
+        assert result.players[0] == "Mohamed Salah"

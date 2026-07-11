@@ -304,12 +304,30 @@ _LOOKUP_TRIGGERS: list[re.Pattern] = [
 ]
 
 _LOOKUP_EXTRACT: list[re.Pattern] = [
-    re.compile(r'\bshow\s+me\s+(.+?)(?:\s*[?.,]|$)', re.I),
-    re.compile(r'\btell\s+me\s+about\s+(.+?)(?:\s*[?.,]|$)', re.I),
-    re.compile(r'\bwho\s+is\s+(.+?)(?:\s*[?.,]|$)', re.I),
+    # Stop before: "in", "from", "for", "by", punctuation, or end-of-string.
+    # The negative lookahead prevents consuming prepositions that introduce
+    # league/metric clauses (e.g. "in the Premier League", "by xG").
+    re.compile(
+        r'\bshow\s+me\s+(.+?)(?=\s+(?:in|from|for|by)\b|\s*[?.,!]|$)',
+        re.I,
+    ),
+    re.compile(
+        r'\btell\s+me\s+about\s+(.+?)(?=\s+(?:in|from|for|by)\b|\s*[?.,!]|$)',
+        re.I,
+    ),
+    re.compile(
+        r'\bwho\s+is\s+(.+?)(?=\s+(?:in|from|for|by)\b|\s*[?.,!]|$)',
+        re.I,
+    ),
     re.compile(r'\bhow\s+(?:is|does)\s+(.+?)\s+(?:compare|perform|play|doing)\b', re.I),
-    re.compile(r'\bstats?\s+(?:of|for)\s+(.+?)(?:\s*[?.,]|$)', re.I),
-    re.compile(r'\bprofile\s+(?:of|for)?\s*(.+?)(?:\s*[?.,]|$)', re.I),
+    re.compile(
+        r'\bstats?\s+(?:of|for)\s+(.+?)(?=\s+(?:in|from|for|by)\b|\s*[?.,!]|$)',
+        re.I,
+    ),
+    re.compile(
+        r'\bprofile\s+(?:of|for)?\s*(.+?)(?=\s+(?:in|from|for|by)\b|\s*[?.,!]|$)',
+        re.I,
+    ),
 ]
 
 
@@ -356,6 +374,55 @@ def _extract_lookup_player(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Shared post-validation (applied to BOTH rule-based and LLM results)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_UNKNOWN_MSG = (
+    "I'm not sure what you're asking. "
+    "Please specify whether you want a player profile, comparison, or ranking metric."
+)
+
+
+def _validate_intent_result(result: ParsedIntent) -> ParsedIntent:
+    """
+    Promote malformed intents to 'unknown' with a clear clarification message.
+
+    Rules applied uniformly to both the LLM path and the rule-based path:
+    - comparison with < 2 players → unknown
+    - ranking with no metric → unknown
+    - player_lookup with no players → unknown
+    - unknown without a clarification_message → add default
+    """
+    intent = result.intent
+
+    if intent == "comparison" and len(result.players) < 2:
+        return result.model_copy(update={
+            "intent": "unknown",
+            "clarification_message": "Please provide two player names to compare.",
+        })
+
+    if intent == "ranking" and not result.metric:
+        return result.model_copy(update={
+            "intent": "unknown",
+            "clarification_message": (
+                result.clarification_message
+                or "Which metric should I rank by, such as goals, assists or xG?"
+            ),
+        })
+
+    if intent == "player_lookup" and not result.players:
+        return result.model_copy(update={
+            "intent": "unknown",
+            "clarification_message": "Which specific player are you asking about?",
+        })
+
+    if intent == "unknown" and not result.clarification_message:
+        return result.model_copy(update={"clarification_message": _DEFAULT_UNKNOWN_MSG})
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Rule-based parser
 # ---------------------------------------------------------------------------
 
@@ -384,6 +451,25 @@ def _parse_rule_based(text: str) -> ParsedIntent:
             raw_query=text,
         )
 
+    # Check lookup BEFORE ranking: "Show me X by metric" is a profile request,
+    # not a ranking, even though it contains a "by" metric clause.
+    if _is_lookup(low):
+        players = _extract_lookup_player(text)
+        if players:
+            return ParsedIntent(
+                intent="player_lookup",
+                players=players,
+                league=league,
+                position=position,
+                raw_query=text,
+            )
+        # Lookup trigger but no recognisable player name → unknown
+        return ParsedIntent(
+            intent="unknown",
+            clarification_message="Which specific player are you asking about?",
+            raw_query=text,
+        )
+
     if _is_ranking(low):
         if not metric:
             return ParsedIntent(
@@ -404,23 +490,6 @@ def _parse_rule_based(text: str) -> ParsedIntent:
             limit=limit,
             min_age=min_age,
             max_age=max_age,
-            raw_query=text,
-        )
-
-    if _is_lookup(low):
-        players = _extract_lookup_player(text)
-        if players:
-            return ParsedIntent(
-                intent="player_lookup",
-                players=players,
-                league=league,
-                position=position,
-                raw_query=text,
-            )
-        # Lookup trigger but no recognisable player name → unknown
-        return ParsedIntent(
-            intent="unknown",
-            clarification_message="Which specific player are you asking about?",
             raw_query=text,
         )
 
@@ -529,7 +598,7 @@ def _parse_with_openai(text: str) -> ParsedIntent | None:
         raw.setdefault("raw_query", text)
         raw.setdefault("players", [])
 
-        return ParsedIntent(**raw)
+        return _validate_intent_result(ParsedIntent(**raw))
 
     except Exception as exc:  # noqa: BLE001
         logger.warning("OpenAI parse failed (%s); falling back to rule-based parser.", exc)
@@ -567,7 +636,7 @@ def parse_query(text: str) -> ParsedIntent:
         result = _parse_with_openai(text)
         if result is not None:
             return result
-        return _parse_rule_based(text)
+        return _validate_intent_result(_parse_rule_based(text))
     except Exception as exc:  # noqa: BLE001
         logger.error("parse_query failed unexpectedly: %s", exc)
         return ParsedIntent(
