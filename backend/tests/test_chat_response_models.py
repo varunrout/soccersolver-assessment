@@ -481,3 +481,100 @@ class TestOpenAPISchema:
         schema_str = str(schema)
         for variant in ("TextResponse", "TableResponse", "ChartResponse", "ComparisonResponse"):
             assert variant in schema_str, f"{variant} not found in OpenAPI schema"
+
+
+# ===========================================================================
+# Whitespace stripping and non-blank validation
+# ===========================================================================
+
+
+class TestWhitespaceValidation:
+    """Verify that whitespace-only values are rejected and valid values are stripped."""
+
+    # --- TableResponse.title ---
+
+    def test_table_whitespace_title_rejected(self):
+        with pytest.raises(ValidationError):
+            TableResponse(title=" ", columns=["name"], rows=[])
+
+    def test_table_title_stripped(self):
+        t = TableResponse(title="  Players  ", columns=["name"], rows=[])
+        assert t.title == "Players"
+
+    # --- TableResponse.columns ---
+
+    def test_table_whitespace_column_rejected(self):
+        with pytest.raises(ValidationError):
+            TableResponse(title="T", columns=[" "], rows=[])
+
+    def test_table_column_stripped(self):
+        t = TableResponse(title="T", columns=["  name  "], rows=[])
+        assert t.columns == ["name"]
+
+    def test_table_stripped_duplicate_columns_rejected(self):
+        """['name', ' name '] strips to ['name', 'name'] → duplicate → rejected."""
+        with pytest.raises(ValidationError):
+            TableResponse(title="T", columns=["name", " name "], rows=[])
+
+    def test_table_row_keys_aligned_with_stripped_columns(self):
+        """Row keys must match stripped column names, not raw names."""
+        t = TableResponse(
+            title="T",
+            columns=["  rank  ", "  name  "],
+            rows=[{"rank": 1, "name": "Salah"}],
+        )
+        assert t.columns == ["rank", "name"]
+
+    # --- ChartResponse.title ---
+
+    def test_chart_whitespace_title_rejected(self):
+        with pytest.raises(ValidationError):
+            ChartResponse(
+                title=" ",
+                labels=["Goals"],
+                datasets=[ChartDataset(label="Player", data=[1.0])],
+            )
+
+    def test_chart_title_stripped(self):
+        c = ChartResponse(
+            title="  My Chart  ",
+            labels=["Goals"],
+            datasets=[ChartDataset(label="Player", data=[1.0])],
+        )
+        assert c.title == "My Chart"
+
+    # --- ChartResponse.labels ---
+
+    def test_chart_whitespace_label_rejected(self):
+        with pytest.raises(ValidationError):
+            ChartResponse(
+                title="Chart",
+                labels=[" "],
+                datasets=[ChartDataset(label="Player", data=[1.0])],
+            )
+
+    def test_chart_label_stripped(self):
+        c = ChartResponse(
+            title="Chart",
+            labels=["  Goals  "],
+            datasets=[ChartDataset(label="Player", data=[1.0])],
+        )
+        assert c.labels == ["Goals"]
+
+    def test_chart_mixed_labels_stripped(self):
+        c = ChartResponse(
+            title="Chart",
+            labels=["  Goals  ", " Assists ", "xG"],
+            datasets=[ChartDataset(label="d", data=[1.0, 2.0, 3.0])],
+        )
+        assert c.labels == ["Goals", "Assists", "xG"]
+
+    # --- ChartDataset.label ---
+
+    def test_dataset_whitespace_label_rejected(self):
+        with pytest.raises(ValidationError):
+            ChartDataset(label="   ", data=[1.0])
+
+    def test_dataset_label_stripped(self):
+        ds = ChartDataset(label="  Salah  ", data=[1.0])
+        assert ds.label == "Salah"

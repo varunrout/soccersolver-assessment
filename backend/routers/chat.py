@@ -12,15 +12,10 @@ Implemented fully in Issue #11.
 """
 
 from fastapi import APIRouter
-from pydantic import BaseModel
 
-from models.chat_responses import ChatResponse, TextResponse
+from models.chat_responses import ChatRequest, ChatResponse, TextResponse
 
 router = APIRouter()
-
-
-class ChatRequest(BaseModel):
-    message: str
 
 
 @router.post("", response_model=ChatResponse, summary="Conversational analytics query")
