@@ -26,14 +26,16 @@ from models.player import ComparisonResult
 
 
 class ParsedIntent(BaseModel):
-    intent: Literal["ranking", "lookup", "comparison", "unknown"]
+    intent: Literal["ranking", "player_lookup", "comparison", "unknown"]
     players: list[str] = Field(default_factory=list)
     metric: str | None = None
     league: str | None = None
     position: str | None = None
     min_age: int | None = None
     max_age: int | None = None
-    limit: int = 5
+    min_minutes: int | None = None
+    limit: int | None = None
+    clarification_message: str | None = None
     raw_query: str = ""
 
 
