@@ -1,14 +1,16 @@
 import type { ComparisonResult } from './player'
 
 export interface ParsedIntent {
-  intent: 'ranking' | 'lookup' | 'comparison' | 'unknown'
+  intent: 'ranking' | 'player_lookup' | 'comparison' | 'unknown'
   players: string[]
   metric: string | null
   league: string | null
   position: string | null
   min_age: number | null
   max_age: number | null
-  limit: number
+  min_minutes: number | null
+  limit: number | null
+  clarification_message: string | null
   raw_query: string
 }
 
@@ -21,7 +23,6 @@ export interface TextResponse {
 export interface ChartDataset {
   label: string
   data: number[]
-  color?: string
 }
 
 export interface ChartResponse {
@@ -36,7 +37,7 @@ export interface TableResponse {
   type: 'table'
   title: string
   columns: string[]
-  rows: Array<Record<string, string | number | null>>
+  rows: Array<Record<string, unknown>>
 }
 
 export interface ComparisonResponse {
@@ -48,13 +49,5 @@ export type ResponseUnion = TextResponse | ChartResponse | TableResponse | Compa
 
 export interface ChatResponse {
   response: ResponseUnion
-}
-
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  response?: ResponseUnion
-  timestamp: Date
 }
 
