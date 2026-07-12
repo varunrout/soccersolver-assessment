@@ -633,10 +633,26 @@ def parse_query(text: str) -> ParsedIntent:
         )
 
     try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        openai_configured = bool(api_key and OpenAI)
+
         result = _parse_with_openai(text)
         if result is not None:
             return result
-        return _validate_intent_result(_parse_rule_based(text))
+
+        rule_result = _validate_intent_result(_parse_rule_based(text))
+
+        # If OpenAI was configured but failed (result was None despite being configured)
+        # AND rule-based also produced unknown → surface the API failure message.
+        if openai_configured and rule_result.intent == "unknown":
+            return rule_result.model_copy(update={
+                "clarification_message": (
+                    "Something went wrong while understanding your question. "
+                    "Please try again."
+                )
+            })
+
+        return rule_result
     except Exception as exc:  # noqa: BLE001
         logger.error("parse_query failed unexpectedly: %s", exc)
         return ParsedIntent(

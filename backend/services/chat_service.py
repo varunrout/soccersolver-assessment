@@ -21,6 +21,7 @@ All numbers come from existing services unchanged.
 from __future__ import annotations
 
 import logging
+import re
 
 from models.chat_responses import (
     ChatResponse,
@@ -45,12 +46,26 @@ DEFAULT_LIMIT = 5
 MAX_CLARIFICATION_CANDIDATES = 5
 
 DEFAULT_UNKNOWN_MESSAGE = (
-    "I'm not sure what you're asking. "
-    "Try: 'Top 5 forwards in the Premier League by goals', "
-    "'Show me Mohamed Salah', or 'Compare Salah and Kane'."
+    "Could you be more specific? "
+    "For example: 'Top 5 strikers in the Premier League by goals per 90'."
+)
+OUT_OF_SCOPE_MESSAGE = (
+    "I can only answer questions about football player statistics."
+)
+OPENAI_FAILURE_MESSAGE = (
+    "Something went wrong while understanding your question. Please try again."
 )
 DEFAULT_ERROR_MESSAGE = (
     "I couldn't process that request. Please try rephrasing it."
+)
+
+# Regex that must match at least one term for a query to be considered football-related.
+_FOOTBALL_TERMS = re.compile(
+    r"\b(?:player|goal|assist|shot|pass|xg|xa|league|club|forward|midfielder|"
+    r"defender|goalkeeper|winger|striker|premier|bundesliga|ligue|serie a|la liga|"
+    r"transfer|market value|minutes|season|rank|compare|salah|kane|messi|ronaldo|"
+    r"football\w*|soccer|stats?|statistics|performance|percentile|position|age)\b",
+    re.I,
 )
 
 # Human-readable label map for ranking table titles (supplement metric_label)
@@ -124,8 +139,8 @@ def execute_chat_query(message: str) -> ChatResponse:
         if intent.intent == "comparison":
             return _handle_comparison(intent)
 
-        # "unknown" or any future unhandled intent
-        return _text(intent.clarification_message or DEFAULT_UNKNOWN_MESSAGE)
+        # "unknown" — decide on the right clarification message
+        return _handle_unknown(message, intent)
 
     except Exception:
         logger.exception("Unexpected error in execute_chat_query for message=%r", message)
@@ -135,6 +150,14 @@ def execute_chat_query(message: str) -> ChatResponse:
 # ---------------------------------------------------------------------------
 # Intent handlers
 # ---------------------------------------------------------------------------
+
+
+def _handle_unknown(original_message: str, intent) -> ChatResponse:
+    """Return an appropriate clarification or out-of-scope error response."""
+    if not _FOOTBALL_TERMS.search(original_message):
+        return _error(OUT_OF_SCOPE_MESSAGE)
+    msg = intent.clarification_message or DEFAULT_UNKNOWN_MESSAGE
+    return _error(msg)
 
 
 def _handle_ranking(intent) -> ChatResponse:
@@ -247,7 +270,7 @@ def _handle_lookup(intent) -> ChatResponse:
 def _handle_comparison(intent) -> ChatResponse:
     players = intent.players
     if len(players) < 2:
-        return _text("Please provide two player names to compare.")
+        return _error("I need two player names to run a comparison.")
 
     resolved_a = resolve_player_name(players[0])
     if isinstance(resolved_a, ChatResponse):
@@ -283,7 +306,7 @@ def resolve_player_name(name: str) -> PlayerSummary | ChatResponse:
     matches = data_service.search_players(name)
 
     if not matches:
-        return _error(f'I couldn\'t find a player matching "{name}".')
+        return _error(f"I couldn't find a player named \"{name}\" in the dataset.")
 
     if len(matches) == 1:
         return matches[0]
