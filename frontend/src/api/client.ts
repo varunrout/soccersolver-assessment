@@ -1,10 +1,20 @@
-import type { PlayerSummary } from '../types/player'
+import type { PlayerDetailWithPercentiles, PlayerSummary } from '../types/player'
 
 export const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 type ErrorPayload = {
   detail?: unknown
   message?: unknown
+}
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
 }
 
 function buildUrl(path: string, params?: Record<string, string>) {
@@ -47,7 +57,7 @@ async function requestJson<T>(path: string, options: RequestInit = {}, params?: 
       payload = null
     }
 
-    throw new Error(extractSafeError(payload))
+    throw new ApiError(extractSafeError(payload), response.status)
   }
 
   return response.json() as Promise<T>
@@ -61,4 +71,17 @@ export async function searchPlayers(query: string, signal?: AbortSignal): Promis
   }
 
   return requestJson<PlayerSummary[]>('/players/search', { signal }, { q: trimmedQuery })
+}
+
+export async function getPlayerProfile(
+  playerId: string,
+  signal?: AbortSignal,
+): Promise<PlayerDetailWithPercentiles> {
+  const trimmedId = playerId.trim()
+
+  if (!trimmedId) {
+    throw new ApiError('Invalid player ID', 400)
+  }
+
+  return requestJson<PlayerDetailWithPercentiles>(`/players/${encodeURIComponent(trimmedId)}`, { signal })
 }

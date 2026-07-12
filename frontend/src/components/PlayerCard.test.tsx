@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import PlayerCard, { formatMarketValue } from './PlayerCard'
+import PlayerCard from './PlayerCard'
 import type { PlayerSummary } from '../types/player'
+import { formatMarketValue } from '../utils/formatters'
 
 const player: PlayerSummary = {
   player_id: 'mo-salah',

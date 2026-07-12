@@ -1,31 +1,9 @@
 import { Link } from 'react-router-dom'
 import type { PlayerSummary } from '../types/player'
+import { formatMarketValue } from '../utils/formatters'
 
 interface Props {
   player: PlayerSummary
-}
-
-function formatCompact(value: number, divisor: number, suffix: string) {
-  const amount = value / divisor
-  const formatted = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(1)
-
-  return `€${formatted}${suffix}`
-}
-
-export function formatMarketValue(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return 'N/A'
-  }
-
-  if (value >= 1_000_000) {
-    return formatCompact(value, 1_000_000, 'm')
-  }
-
-  if (value >= 1_000) {
-    return formatCompact(value, 1_000, 'k')
-  }
-
-  return 'N/A'
 }
 
 export default function PlayerCard({ player }: Props) {
