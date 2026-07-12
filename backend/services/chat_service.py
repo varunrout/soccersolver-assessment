@@ -61,10 +61,33 @@ DEFAULT_ERROR_MESSAGE = (
 
 # Regex that must match at least one term for a query to be considered football-related.
 _FOOTBALL_TERMS = re.compile(
-    r"\b(?:player|goal|assist|shot|pass|xg|xa|league|club|forward|midfielder|"
-    r"defender|goalkeeper|winger|striker|premier|bundesliga|ligue|serie a|la liga|"
-    r"transfer|market value|minutes|season|rank|compare|salah|kane|messi|ronaldo|"
-    r"football\w*|soccer|stats?|statistics|performance|percentile|position|age)\b",
+    r"\b(?:"
+    r"players?|"
+    r"goals?|"
+    r"assists?|"
+    r"shots?|"
+    r"passes?|"
+    r"leagues?|"
+    r"clubs?|"
+    r"forwards?|"
+    r"midfielders?|"
+    r"defenders?|"
+    r"goalkeepers?|"
+    r"wingers?|"
+    r"strikers?|"
+    r"footballers?|"
+    r"transfers?|"
+    r"minutes?|"
+    r"seasons?|"
+    r"rank(?:ing|ed|s)?|"
+    r"compare|comparison|"
+    r"xg|xa|"
+    r"premier|bundesliga|ligue|serie\s+a|la\s+liga|"
+    r"market\s+value|"
+    r"football|soccer|"
+    r"stats?|statistics|performance|percentiles?|positions?|ages?|"
+    r"salah|kane|messi|ronaldo"
+    r")\b",
     re.I,
 )
 
@@ -153,11 +176,15 @@ def execute_chat_query(message: str) -> ChatResponse:
 
 
 def _handle_unknown(original_message: str, intent) -> ChatResponse:
-    """Return an appropriate clarification or out-of-scope error response."""
+    """
+    Return a clarification for unknown football queries, or an error for
+    out-of-scope queries that have no football relevance.
+    """
     if not _FOOTBALL_TERMS.search(original_message):
         return _error(OUT_OF_SCOPE_MESSAGE)
+    # Football-related but intent not understood — this is a clarification, not an error
     msg = intent.clarification_message or DEFAULT_UNKNOWN_MESSAGE
-    return _error(msg)
+    return _text(msg)
 
 
 def _handle_ranking(intent) -> ChatResponse:
@@ -270,7 +297,7 @@ def _handle_lookup(intent) -> ChatResponse:
 def _handle_comparison(intent) -> ChatResponse:
     players = intent.players
     if len(players) < 2:
-        return _error("I need two player names to run a comparison.")
+        return _text("I need two player names to run a comparison.")
 
     resolved_a = resolve_player_name(players[0])
     if isinstance(resolved_a, ChatResponse):
@@ -301,25 +328,44 @@ def resolve_player_name(name: str) -> PlayerSummary | ChatResponse:
     """
     Resolve a player name string to a single PlayerSummary.
 
-    Returns a ChatResponse (TextResponse) if resolution fails or is ambiguous.
+    Resolution rules:
+    1. Blank name → clarification (no search call).
+    2. No matches → execution-blocking error.
+    3. Exactly one match → use it.
+    4. Multiple matches: look for a case-insensitive exact full-name match.
+    5. Exactly one exact match → use it.
+    6. Still ambiguous → execution-blocking error listing ≤5 deduplicated candidates.
     """
-    matches = data_service.search_players(name)
+    clean_name = name.strip()
+    if not clean_name:
+        return _text("Which specific player are you asking about?")
+
+    matches = data_service.search_players(clean_name)
 
     if not matches:
-        return _error(f"I couldn't find a player named \"{name}\" in the dataset.")
+        return _error(f'I couldn\'t find a player named "{clean_name}" in the dataset.')
 
     if len(matches) == 1:
         return matches[0]
 
-    # Check for a case-insensitive exact full-name match among candidates
-    exact = [m for m in matches if m.name.lower() == name.lower()]
+    # Case-insensitive exact full-name match
+    lower_name = clean_name.lower()
+    exact = [m for m in matches if m.name.strip().lower() == lower_name]
     if len(exact) == 1:
         return exact[0]
 
-    # Ambiguous — list up to five candidates
-    candidates = ", ".join(m.name for m in matches[:MAX_CLARIFICATION_CANDIDATES])
-    return _text(
-        f'I found multiple players matching "{name}": {candidates}. '
+    # Ambiguous — deduplicate, sort, cap at MAX_CLARIFICATION_CANDIDATES
+    seen_lower: set[str] = set()
+    unique_names: list[str] = []
+    for m in matches:
+        key = m.name.strip().lower()
+        if key not in seen_lower:
+            seen_lower.add(key)
+            unique_names.append(m.name.strip())
+    unique_names.sort()
+    candidates = ", ".join(unique_names[:MAX_CLARIFICATION_CANDIDATES])
+    return _error(
+        f'I found multiple players matching "{clean_name}": {candidates}. '
         "Please use the full player name."
     )
 

@@ -812,3 +812,60 @@ class TestGracefulFailureHandling:
         # Unknown player
         r = client.post("/chat", json={"message": "Show me Xyzzy Nonexistent Player"})
         assert r.status_code == 200
+
+    # 8. Plural football terms must NOT be treated as out-of-scope
+    def test_plural_players_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top players"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_plural_forwards_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top forwards"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_plural_strikers_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Best strikers"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_players_by_assists_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Players by assists"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        # Football query: either a clarification (is_error=False) or a real result (no is_error)
+        assert resp.get("is_error", False) is False
+
+    def test_plural_midfielders_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top midfielders"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_defenders_by_passes_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Defenders by passes"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_goalkeepers_by_minutes_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Goalkeepers by minutes"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_who_has_most_goals_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Who has the most goals?"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_weather_query_is_out_of_scope(self):
+        r = client.post("/chat", json={"message": "What's the weather?"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is True
+
+    def test_cake_recipe_is_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Give me a cake recipe"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is True
