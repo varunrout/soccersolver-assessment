@@ -104,7 +104,7 @@ describe('ChatPage', () => {
     expect(Array.from(history.children).every((child) => child.tagName.toLowerCase() === 'li')).toBe(true)
   })
 
-  it('Enter submits and Shift+Enter does not submit', () => {
+  it('Enter submits and Shift+Enter does not submit', async () => {
     mockedSendChatMessage.mockResolvedValue(textResponse)
     render(<ChatPage />)
 
@@ -115,15 +115,17 @@ describe('ChatPage', () => {
 
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(mockedSendChatMessage).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Which metric should I rank by?')).toBeTruthy()
   })
 
-  it('clicking an example sends it through the backend', () => {
+  it('clicking an example sends it through the backend', async () => {
     mockedSendChatMessage.mockResolvedValue(textResponse)
     render(<ChatPage />)
 
     fireEvent.click(screen.getByRole('button', { name: /compare mohamed salah and harry kane/i }))
 
     expect(mockedSendChatMessage).toHaveBeenCalledWith('Compare Mohamed Salah and Harry Kane', expect.any(AbortSignal))
+    expect(await screen.findByText('Which metric should I rank by?')).toBeTruthy()
   })
 
   it('preserves prior messages after later questions', async () => {
