@@ -1,26 +1,46 @@
+import { Link } from 'react-router-dom'
 import type { PlayerSummary } from '../types/player'
 
 interface Props {
   player: PlayerSummary
-  onClick?: () => void
 }
 
-const FMT = new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 })
+function formatCompact(value: number, divisor: number, suffix: string) {
+  const amount = value / divisor
+  const formatted = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(1)
 
-export default function PlayerCard({ player, onClick }: Props) {
+  return `€${formatted}${suffix}`
+}
+
+export function formatMarketValue(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'N/A'
+  }
+
+  if (value >= 1_000_000) {
+    return formatCompact(value, 1_000_000, 'm')
+  }
+
+  if (value >= 1_000) {
+    return formatCompact(value, 1_000, 'k')
+  }
+
+  return 'N/A'
+}
+
+export default function PlayerCard({ player }: Props) {
   return (
-    <div className="player-card" onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}>
+    <Link className="player-card" to={`/player/${player.player_id}`} aria-label={`View ${player.name} profile`}>
       <div className="player-card__name">{player.name}</div>
       <div className="player-card__meta">
-        <span>{player.position}</span>
-        <span>·</span>
+        <span className="player-card__position">{player.position}</span>
         <span>{player.club}</span>
-        <span>·</span>
         <span>{player.league}</span>
       </div>
       <div className="player-card__stats">
-        <span>€{FMT.format(player.market_value_eur)}</span>
+        <span>Estimated market value</span>
+        <strong>{formatMarketValue(player.market_value_eur)}</strong>
       </div>
-    </div>
+    </Link>
   )
 }
