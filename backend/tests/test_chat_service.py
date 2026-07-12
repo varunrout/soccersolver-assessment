@@ -764,14 +764,23 @@ class TestGracefulFailureHandling:
         with patch("services.chat_service.parse_query", return_value=intent):
             result = execute_chat_query("compare Salah")
         assert isinstance(result.response, TextResponse)
-        assert result.response.is_error is True
+        # incomplete comparison is a clarification, not an execution error
+        assert result.response.is_error is False
         assert "two" in result.response.message.lower() or "run a comparison" in result.response.message.lower()
 
-    # 6. intent="unknown" always is_error=True
-    def test_unknown_intent_is_error_true(self):
+    # 6. intent="unknown" for football queries is clarification (is_error=False)
+    def test_unknown_intent_is_error_false_for_football(self):
         intent = _make_intent(intent="unknown", clarification_message="Which metric?")
         with patch("services.chat_service.parse_query", return_value=intent):
             result = execute_chat_query("goals football")
+        # Football-related unknown → clarification, not error
+        assert result.response.is_error is False
+
+    def test_unknown_intent_out_of_scope_is_error_true(self):
+        intent = _make_intent(intent="unknown", clarification_message="Which metric?")
+        with patch("services.chat_service.parse_query", return_value=intent):
+            result = execute_chat_query("what is the weather today")
+        # Out-of-scope → is_error=True
         assert result.response.is_error is True
 
     def test_unknown_intent_never_raises_http500(self):
