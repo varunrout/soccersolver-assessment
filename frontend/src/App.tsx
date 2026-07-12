@@ -7,7 +7,7 @@ import ChatPage from './pages/ChatPage'
 function Nav() {
   return (
     <nav className="nav">
-      <span className="nav-brand">⚽ SoccerSolver</span>
+      <span className="nav-brand">{'\u26bd'} SoccerSolver</span>
       <div className="nav-links">
         <NavLink to="/" end>Search</NavLink>
         <NavLink to="/compare">Compare</NavLink>

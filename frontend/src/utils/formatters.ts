@@ -2,7 +2,7 @@ function formatCompact(value: number, divisor: number, suffix: string) {
   const amount = value / divisor
   const formatted = Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(1)
 
-  return `€${formatted}${suffix}`
+  return `\u20ac${formatted}${suffix}`
 }
 
 export function formatMarketValue(value: number): string {

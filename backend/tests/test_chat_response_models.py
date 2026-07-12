@@ -14,9 +14,16 @@ Covers:
 from __future__ import annotations
 
 import math
+import sys
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+
+# Ensure backend/ is importable when pytest is invoked from backend/.
+_BACKEND = Path(__file__).parent.parent
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 from models.chat_responses import (
     ChatRequest,

@@ -120,7 +120,7 @@ export default function ProfilePage() {
               <span className="profile-badge">{player.position}</span>
               <h1 className="page-title">{player.name}</h1>
               <p>
-                {player.club} · {player.league}
+                {player.club} {'\u00b7'} {player.league}
               </p>
             </div>
             <dl className="profile-facts">
