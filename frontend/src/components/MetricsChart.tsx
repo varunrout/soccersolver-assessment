@@ -1,36 +1,102 @@
-import {
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts'
+import type { PlayerPercentiles } from '../types/player'
 
-interface Props {
-  labels: string[]
-  values: number[]   // percentile 0-100
-  title: string
+const METRIC_LABELS: Record<string, string> = {
+  goals_p90: 'Goals per 90',
+  assists_p90: 'Assists per 90',
+  shots_p90: 'Shots per 90',
+  passes_p90: 'Passes per 90',
+  xg_p90: 'xG per 90',
+  xa_p90: 'xA per 90',
 }
 
-export default function MetricsChart({ labels, values, title }: Props) {
-  const data = labels.map((label, i) => ({ label, value: values[i] ?? 0 }))
+type PercentileMetric = {
+  key: string
+  label: string
+  value: number
+}
 
-  if (data.length === 0) {
-    return <div className="placeholder-card"><p className="placeholder-text">No metrics to display.</p></div>
+interface Props {
+  percentiles: PlayerPercentiles | null
+}
+
+function getOrdinalSuffix(value: number) {
+  const mod100 = value % 100
+
+  if (mod100 >= 11 && mod100 <= 13) {
+    return 'th'
+  }
+
+  switch (value % 10) {
+    case 1:
+      return 'st'
+    case 2:
+      return 'nd'
+    case 3:
+      return 'rd'
+    default:
+      return 'th'
+  }
+}
+
+export function formatPercentile(value: number) {
+  const rounded = Math.round(value)
+
+  return `${rounded}${getOrdinalSuffix(rounded)} percentile`
+}
+
+function getMetricLabel(key: string) {
+  return METRIC_LABELS[key] ?? key.replace(/_/g, ' ')
+}
+
+function getDisplayMetrics(percentiles: PlayerPercentiles | null): PercentileMetric[] {
+  if (!percentiles?.metrics) {
+    return []
+  }
+
+  return Object.entries(percentiles.metrics)
+    .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+    .map(([key, value]) => ({
+      key,
+      label: getMetricLabel(key),
+      value: Math.min(100, Math.max(0, value as number)),
+    }))
+}
+
+export default function MetricsChart({ percentiles }: Props) {
+  const metrics = getDisplayMetrics(percentiles)
+
+  if (metrics.length === 0) {
+    return (
+      <div className="placeholder-card">
+        <p className="placeholder-text">Contextual percentile data is not available for this player.</p>
+      </div>
+    )
   }
 
   return (
-    <div className="chart-wrapper">
-      <h3 className="chart-title">{title}</h3>
-      <ResponsiveContainer width="100%" height={320}>
-        <RadarChart data={data}>
-          <PolarGrid />
-          <PolarAngleAxis dataKey="label" />
-          <Radar dataKey="value" fill="#3b82f6" fillOpacity={0.5} stroke="#3b82f6" />
-          <Tooltip />
-        </RadarChart>
-      </ResponsiveContainer>
+    <div className="chart-wrapper percentile-chart">
+      <h2 className="section-title">Contextual Percentiles</h2>
+      <p className="section-note">
+        Percentiles compare this player with players in the same position and league who meet the minimum-minutes
+        threshold.
+      </p>
+      <div className="percentile-list">
+        {metrics.map((metric) => (
+          <div className="percentile-row" key={metric.key}>
+            <div className="percentile-row__header">
+              <span>{metric.label}</span>
+              <strong>{formatPercentile(metric.value)}</strong>
+            </div>
+            <div
+              className="percentile-bar"
+              role="img"
+              aria-label={`${metric.label}: ${formatPercentile(metric.value)}`}
+            >
+              <span className="percentile-bar__fill" style={{ width: `${metric.value}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
