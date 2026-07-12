@@ -1,4 +1,5 @@
 import type { ComparisonResult, PlayerDetailWithPercentiles, PlayerSummary } from '../types/player'
+import type { ChatResponse } from '../types/chat'
 
 export const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -106,4 +107,21 @@ export async function comparePlayers(
       player_b_id: trimmedPlayerBId,
     },
   )
+}
+
+export async function sendChatMessage(message: string, signal?: AbortSignal): Promise<ChatResponse> {
+  const trimmedMessage = message.trim()
+
+  if (!trimmedMessage) {
+    throw new ApiError('Message must not be blank', 400)
+  }
+
+  return requestJson<ChatResponse>('/chat', {
+    method: 'POST',
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message: trimmedMessage }),
+  })
 }
