@@ -553,20 +553,30 @@ _PARSE_TOOL: dict[str, Any] = {
 }
 
 
-def _parse_with_openai(text: str) -> ParsedIntent | None:
+def _parse_with_openai(text: str) -> tuple[ParsedIntent | None, bool, bool]:
     """
     Try to parse the query with OpenAI tool calling.
-    Returns None when:
-      - OPENAI_API_KEY is not set
-      - OpenAI package is unavailable
-      - the API call fails for any reason
-      - the response cannot be validated as ParsedIntent
+
+    Returns a 3-tuple: (result, attempted, failed)
+      result    — ParsedIntent if successful, else None
+      attempted — True if an API call was actually made
+      failed    — True if the call was made but raised an exception or
+                  returned an unusable response
+
+    Cases where attempted=False (no API call made):
+      - OPENAI_API_KEY not set
+      - OpenAI package unavailable
+
+    Cases where attempted=True, failed=True:
+      - Network / auth exception
+      - JSON decode error
+      - Pydantic validation error on response
 
     Never raises.
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or OpenAI is None:
-        return None
+        return None, False, False  # not attempted
 
     try:
         model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -585,7 +595,7 @@ def _parse_with_openai(text: str) -> ParsedIntent | None:
 
         tool_calls = response.choices[0].message.tool_calls
         if not tool_calls:
-            return None
+            return None, True, True  # attempted, but got no tool call
 
         raw: dict[str, Any] = json.loads(tool_calls[0].function.arguments)
 
@@ -598,11 +608,11 @@ def _parse_with_openai(text: str) -> ParsedIntent | None:
         raw.setdefault("raw_query", text)
         raw.setdefault("players", [])
 
-        return _validate_intent_result(ParsedIntent(**raw))
+        return _validate_intent_result(ParsedIntent(**raw)), True, False
 
     except Exception as exc:  # noqa: BLE001
         logger.warning("OpenAI parse failed (%s); falling back to rule-based parser.", exc)
-        return None
+        return None, True, True  # attempted and failed
 
 
 # ---------------------------------------------------------------------------
@@ -620,7 +630,9 @@ def parse_query(text: str) -> ParsedIntent:
 
     Never raises to the caller.
     """
-    text = (text or "").strip()
+    if not isinstance(text, str):
+        text = ""
+    text = text.strip()
 
     if not text:
         return ParsedIntent(
@@ -633,10 +645,23 @@ def parse_query(text: str) -> ParsedIntent:
         )
 
     try:
-        result = _parse_with_openai(text)
+        result, attempted, failed = _parse_with_openai(text)
         if result is not None:
             return result
-        return _validate_intent_result(_parse_rule_based(text))
+
+        rule_result = _validate_intent_result(_parse_rule_based(text))
+
+        # Only replace the rule-based clarification with the API failure message
+        # when an API call was genuinely attempted and failed.
+        if attempted and failed and rule_result.intent == "unknown":
+            return rule_result.model_copy(update={
+                "clarification_message": (
+                    "Something went wrong while understanding your question. "
+                    "Please try again."
+                )
+            })
+
+        return rule_result
     except Exception as exc:  # noqa: BLE001
         logger.error("parse_query failed unexpectedly: %s", exc)
         return ParsedIntent(

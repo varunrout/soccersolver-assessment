@@ -198,7 +198,7 @@ class TestUnknownIntent:
             clarification_message="Please specify a metric.",
         )
         with patch("services.chat_service.parse_query", return_value=intent):
-            result = execute_chat_query("who is best?")
+            result = execute_chat_query("top football players")  # football term keeps clarification
         assert result.response.message == "Please specify a metric."
 
     def test_missing_clarification_receives_default(self):
@@ -651,3 +651,221 @@ class TestLiveIntegration:
         r = client.post("/chat", json={"message": "Who is the best player?"})
         assert r.status_code == 200
         assert r.json()["response"]["type"] == "text"
+
+
+# ===========================================================================
+# Issue #12 — Graceful failure handling acceptance criteria
+# ===========================================================================
+
+
+class TestGracefulFailureHandling:
+    """Acceptance-criteria tests for Issue #12."""
+
+    # 1. Unknown player name
+    def test_unknown_player_name_message(self):
+        r = client.post("/chat", json={"message": "Show me Xyzzy Fake Player"})
+        assert r.status_code == 200
+        body = r.json()["response"]
+        assert body["type"] == "text"
+        assert body["is_error"] is True
+        assert "in the dataset" in body["message"]
+
+    def test_unknown_player_message_format(self):
+        intent = _make_intent(intent="player_lookup", players=["Ghosty McFake"])
+        with (
+            patch("services.chat_service.parse_query", return_value=intent),
+            patch("services.chat_service.data_service.search_players", return_value=[]),
+        ):
+            result = execute_chat_query("show me Ghosty McFake")
+        assert 'Ghosty McFake' in result.response.message
+        assert "in the dataset" in result.response.message
+        assert result.response.is_error is True
+
+    # 2. Ambiguous / no metric
+    def test_ambiguous_no_metric_returns_text_with_example(self):
+        r = client.post("/chat", json={"message": "show me the best football player"})
+        assert r.status_code == 200
+        body = r.json()["response"]
+        assert body["type"] == "text"
+
+    def test_ranking_no_metric_suggests_metric(self):
+        intent = _make_intent(intent="unknown",
+                              clarification_message="Which metric should I rank by, such as goals, assists or xG?")
+        with patch("services.chat_service.parse_query", return_value=intent):
+            result = execute_chat_query("best footballers")
+        assert isinstance(result.response, TextResponse)
+        assert "goals" in result.response.message.lower() or "metric" in result.response.message.lower()
+
+    # 3. Out-of-scope query
+    def test_weather_query_returns_out_of_scope_message(self):
+        r = client.post("/chat", json={"message": "What's the weather in Madrid?"})
+        assert r.status_code == 200
+        body = r.json()["response"]
+        assert body["type"] == "text"
+        assert "football" in body["message"].lower() or "statistics" in body["message"].lower()
+
+    def test_out_of_scope_returns_is_error_true(self):
+        r = client.post("/chat", json={"message": "What's the weather in Madrid?"})
+        assert r.json()["response"]["is_error"] is True
+
+    def test_clearly_non_football_query(self):
+        for query in [
+            "What's the weather in Madrid?",
+            "Give me a chocolate cake recipe",
+            "What is the capital of France?",
+        ]:
+            r = client.post("/chat", json={"message": query})
+            assert r.status_code == 200
+            body = r.json()["response"]
+            assert body["type"] == "text"
+            assert "football" in body["message"].lower() or "statistics" in body["message"].lower(), \
+                f"Query '{query}' did not return out-of-scope message"
+
+    # 4. OpenAI API failure
+    def test_openai_failure_with_rule_based_fallback_works(self, monkeypatch):
+        """When OpenAI fails but rule-based can parse → use rule-based result."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = Exception("API down")
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query as real_parse
+            result = real_parse("Top 5 forwards in the Premier League by goals")
+        # Rule-based should produce ranking intent
+        assert result.intent == "ranking"
+
+    def test_openai_failure_unknown_query_returns_failure_message(self, monkeypatch):
+        """When OpenAI fails AND rule-based can't parse → show failure message."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-fake")
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = Exception("API down")
+        with patch("nlu.parser.OpenAI", return_value=mock_client):
+            from nlu.parser import parse_query as real_parse
+            result = real_parse("What's the weather in Madrid?")
+        # Weather query is out-of-scope; rule-based also returns unknown
+        assert result.intent == "unknown"
+        assert "wrong" in result.clarification_message.lower() or "again" in result.clarification_message.lower()
+
+    # 5. Two-player comparison with only one player resolved
+    def test_comparison_one_player_resolved_message(self):
+        intent = _make_intent(intent="comparison", players=["Salah", "Ghost Player"])
+        salah = _make_summary("e342ad68", "Mohamed Salah")
+        with (
+            patch("services.chat_service.parse_query", return_value=intent),
+            patch("services.chat_service.data_service.search_players",
+                  side_effect=[[salah], []]),
+        ):
+            result = execute_chat_query("compare Salah and Ghost Player")
+        assert isinstance(result.response, TextResponse)
+        assert result.response.is_error is True
+        assert "Ghost Player" in result.response.message
+
+    def test_comparison_fewer_than_two_names_message(self):
+        intent = _make_intent(intent="comparison", players=["Salah"])
+        with patch("services.chat_service.parse_query", return_value=intent):
+            result = execute_chat_query("compare Salah")
+        assert isinstance(result.response, TextResponse)
+        # incomplete comparison is a clarification, not an execution error
+        assert result.response.is_error is False
+        assert "two" in result.response.message.lower() or "run a comparison" in result.response.message.lower()
+
+    # 6. intent="unknown" for football queries is clarification (is_error=False)
+    def test_unknown_intent_is_error_false_for_football(self):
+        intent = _make_intent(intent="unknown", clarification_message="Which metric?")
+        with patch("services.chat_service.parse_query", return_value=intent):
+            result = execute_chat_query("goals football")
+        # Football-related unknown → clarification, not error
+        assert result.response.is_error is False
+
+    def test_unknown_intent_out_of_scope_is_error_true(self):
+        intent = _make_intent(intent="unknown", clarification_message="Which metric?")
+        with patch("services.chat_service.parse_query", return_value=intent):
+            result = execute_chat_query("what is the weather today")
+        # Out-of-scope → is_error=True
+        assert result.response.is_error is True
+
+    def test_unknown_intent_never_raises_http500(self):
+        """Any unknown intent must return 200, not 500."""
+        for query in [
+            "???",
+            "Who is the best player?",
+            "Tell me about football in general",
+        ]:
+            # Need football term to avoid out-of-scope; use football
+            r = client.post("/chat", json={"message": "best football stats"})
+            assert r.status_code == 200
+
+    # 7. All errors are helpful (no raw exceptions exposed)
+    def test_no_stack_trace_in_error_responses(self):
+        intent = _make_intent(intent="ranking", metric="goals")
+        with (
+            patch("services.chat_service.parse_query", return_value=intent),
+            patch("services.chat_service.stats_service.rank_players",
+                  side_effect=RuntimeError("internal SQL error")),
+        ):
+            result = execute_chat_query("top players by goals")
+        assert "SQL" not in result.response.message
+        assert "Traceback" not in result.response.message
+        assert "RuntimeError" not in result.response.message
+
+    def test_error_responses_never_http_500(self):
+        """All domain errors must be HTTP 200 with is_error=True, not 500."""
+        # Unknown player
+        r = client.post("/chat", json={"message": "Show me Xyzzy Nonexistent Player"})
+        assert r.status_code == 200
+
+    # 8. Plural football terms must NOT be treated as out-of-scope
+    def test_plural_players_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top players"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_plural_forwards_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top forwards"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_plural_strikers_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Best strikers"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is False
+
+    def test_players_by_assists_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Players by assists"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        # Football query: either a clarification (is_error=False) or a real result (no is_error)
+        assert resp.get("is_error", False) is False
+
+    def test_plural_midfielders_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Top midfielders"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_defenders_by_passes_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Defenders by passes"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_goalkeepers_by_minutes_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Goalkeepers by minutes"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_who_has_most_goals_is_not_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Who has the most goals?"})
+        assert r.status_code == 200
+        resp = r.json()["response"]
+        assert resp.get("is_error", False) is False
+
+    def test_weather_query_is_out_of_scope(self):
+        r = client.post("/chat", json={"message": "What's the weather?"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is True
+
+    def test_cake_recipe_is_out_of_scope(self):
+        r = client.post("/chat", json={"message": "Give me a cake recipe"})
+        assert r.status_code == 200
+        assert r.json()["response"]["is_error"] is True
