@@ -1,20 +1,4 @@
-import { useId } from 'react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { lazy, Suspense, useId } from 'react'
 import type { ChartResponse, ResponseUnion, TableResponse } from '../types/chat'
 import ComparisonResultView from './ComparisonResultView'
 
@@ -22,11 +6,12 @@ interface Props {
   response: ResponseUnion
 }
 
-const CHART_COLOURS = ['#3b82f6', '#f97316', '#22c55e', '#e879f9']
+const ChartGraphic = lazy(() => import('./ChartGraphic'))
+const EMPTY_VALUE = '\u2014'
 
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) {
-    return '—'
+    return EMPTY_VALUE
   }
 
   if (typeof value === 'string') {
@@ -34,7 +19,7 @@ function formatCellValue(value: unknown): string {
   }
 
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? value.toLocaleString('en-GB', { maximumFractionDigits: 3 }) : '—'
+    return Number.isFinite(value) ? value.toLocaleString('en-GB', { maximumFractionDigits: 3 }) : EMPTY_VALUE
   }
 
   if (typeof value === 'boolean') {
@@ -45,7 +30,7 @@ function formatCellValue(value: unknown): string {
     const serialized = JSON.stringify(value)
     return serialized.length > 120 ? `${serialized.slice(0, 117)}...` : serialized
   } catch {
-    return '—'
+    return EMPTY_VALUE
   }
 }
 
@@ -84,82 +69,6 @@ function TableRenderer({ response }: { response: TableResponse }) {
   )
 }
 
-function buildChartData(response: ChartResponse) {
-  return response.labels.map((label, index) => {
-    const row: Record<string, string | number> = { label }
-
-    response.datasets.forEach((dataset) => {
-      const value = dataset.data[index]
-      row[dataset.label] = Number.isFinite(value) ? value : 0
-    })
-
-    return row
-  })
-}
-
-function ChartGraphic({ response }: { response: ChartResponse }) {
-  const data = buildChartData(response)
-
-  if (response.chart_type === 'radar') {
-    return (
-      <ResponsiveContainer width="100%" height={320}>
-        <RadarChart data={data}>
-          <PolarGrid />
-          <PolarAngleAxis dataKey="label" />
-          {response.datasets.map((dataset, index) => (
-            <Radar
-              dataKey={dataset.label}
-              fill={CHART_COLOURS[index % CHART_COLOURS.length]}
-              fillOpacity={0.25}
-              key={dataset.label}
-              stroke={CHART_COLOURS[index % CHART_COLOURS.length]}
-            />
-          ))}
-          <Legend />
-          <Tooltip />
-        </RadarChart>
-      </ResponsiveContainer>
-    )
-  }
-
-  if (response.chart_type === 'line') {
-    return (
-      <ResponsiveContainer width="100%" height={320}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" />
-          <YAxis />
-          <Tooltip />
-          <Legend />
-          {response.datasets.map((dataset, index) => (
-            <Line
-              dataKey={dataset.label}
-              key={dataset.label}
-              stroke={CHART_COLOURS[index % CHART_COLOURS.length]}
-              type="monotone"
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    )
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="label" />
-        <YAxis />
-        <Tooltip />
-        <Legend />
-        {response.datasets.map((dataset, index) => (
-          <Bar dataKey={dataset.label} fill={CHART_COLOURS[index % CHART_COLOURS.length]} key={dataset.label} />
-        ))}
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
 function ChartRenderer({ response }: { response: ChartResponse }) {
   const generatedId = useId()
   const headingId = `chart-${generatedId}`
@@ -168,7 +77,9 @@ function ChartRenderer({ response }: { response: ChartResponse }) {
     <section className="response-card" aria-labelledby={headingId}>
       <h2 className="section-title" id={headingId}>{response.title}</h2>
       <div className="chart-canvas" role="img" aria-label={`${response.title} ${response.chart_type} chart`}>
-        <ChartGraphic response={response} />
+        <Suspense fallback={<p className="placeholder-text">Loading chart...</p>}>
+          <ChartGraphic response={response} />
+        </Suspense>
       </div>
       <div className="chart-values" aria-label={`${response.title} chart values`}>
         <table className="data-table" aria-label={`${response.title} chart values`}>

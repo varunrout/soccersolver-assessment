@@ -1,9 +1,15 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChartResponse, ResponseUnion, TableResponse } from '../types/chat'
 import type { ComparisonResult, PlayerDetail } from '../types/player'
 import ResponseRenderer from './ResponseRenderer'
+
+vi.mock('./ChartGraphic', () => ({
+  default: ({ response }: { response: ChartResponse }) => (
+    <div data-testid="chart-graphic">{response.chart_type}</div>
+  ),
+}))
 
 const salah: PlayerDetail = {
   player_id: 'e342ad68',
@@ -83,7 +89,7 @@ describe('ResponseRenderer table', () => {
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent)
     expect(headers).toEqual(['rank', 'name', 'meta', 'available'])
     expect(screen.getByText('Mohamed Salah')).toBeTruthy()
-    expect(screen.getByText('—')).toBeTruthy()
+    expect(screen.getByText('\u2014')).toBeTruthy()
     expect(screen.getByText('{"club":"Tottenham"}')).toBeTruthy()
     expect(screen.getByText('True')).toBeTruthy()
     expect(screen.getByText('False')).toBeTruthy()
@@ -116,7 +122,7 @@ describe('ResponseRenderer table', () => {
 })
 
 describe('ResponseRenderer chart', () => {
-  it('renders radar response with accessible values', () => {
+  it('renders radar response with accessible values', async () => {
     const response: ChartResponse = {
       type: 'chart',
       title: 'Mohamed Salah vs peers',
@@ -133,9 +139,10 @@ describe('ResponseRenderer chart', () => {
     expect(screen.getByRole('table', { name: /chart values/i })).toBeTruthy()
     expect(screen.getByText('Goals')).toBeTruthy()
     expect(screen.getByText('97.1')).toBeTruthy()
+    expect(await screen.findByTestId('chart-graphic')).toBeTruthy()
   })
 
-  it('handles non-finite and mismatched malformed chart data without crashing', () => {
+  it('handles non-finite and mismatched malformed chart data without crashing', async () => {
     const response: ChartResponse = {
       type: 'chart',
       title: 'Malformed chart',
@@ -146,10 +153,11 @@ describe('ResponseRenderer chart', () => {
     renderResponse(response)
 
     expect(screen.getByText('Malformed chart')).toBeTruthy()
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('\u2014').length).toBeGreaterThan(0)
+    expect(await screen.findByTestId('chart-graphic')).toBeTruthy()
   })
 
-  it('uses unique heading IDs for repeated chart titles', () => {
+  it('uses unique heading IDs for repeated chart titles', async () => {
     const response: ChartResponse = {
       type: 'chart',
       title: 'Repeated chart',
@@ -167,6 +175,7 @@ describe('ResponseRenderer chart', () => {
 
     const ids = screen.getAllByRole('heading', { name: 'Repeated chart' }).map((heading) => heading.id)
     expect(new Set(ids).size).toBe(ids.length)
+    expect(await screen.findAllByTestId('chart-graphic')).toHaveLength(2)
   })
 })
 

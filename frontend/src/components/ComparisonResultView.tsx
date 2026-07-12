@@ -8,7 +8,7 @@ function PlayerIdentity({ player, label }: { player: PlayerDetail, label: string
     <article className="comparison-player-card">
       <span className="profile-badge">{label}</span>
       <h2><Link to={`/player/${player.player_id}`}>{player.name}</Link></h2>
-      <p>{player.position} · {player.club} · {player.league}</p>
+      <p>{player.position} {'\u00b7'} {player.club} {'\u00b7'} {player.league}</p>
       <dl>
         <div>
           <dt>Age</dt>
