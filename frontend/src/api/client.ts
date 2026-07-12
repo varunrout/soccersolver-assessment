@@ -1,4 +1,4 @@
-import type { PlayerDetailWithPercentiles, PlayerSummary } from '../types/player'
+import type { ComparisonResult, PlayerDetailWithPercentiles, PlayerSummary } from '../types/player'
 
 export const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
@@ -84,4 +84,26 @@ export async function getPlayerProfile(
   }
 
   return requestJson<PlayerDetailWithPercentiles>(`/players/${encodeURIComponent(trimmedId)}`, { signal })
+}
+
+export async function comparePlayers(
+  playerAId: string,
+  playerBId: string,
+  signal?: AbortSignal,
+): Promise<ComparisonResult> {
+  const trimmedPlayerAId = playerAId.trim()
+  const trimmedPlayerBId = playerBId.trim()
+
+  if (!trimmedPlayerAId || !trimmedPlayerBId) {
+    throw new ApiError('Invalid player IDs', 400)
+  }
+
+  return requestJson<ComparisonResult>(
+    '/players/compare',
+    { signal },
+    {
+      player_a_id: trimmedPlayerAId,
+      player_b_id: trimmedPlayerBId,
+    },
+  )
 }
