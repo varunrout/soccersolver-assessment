@@ -272,6 +272,34 @@ describe('ComparePage comparison', () => {
     expect(within(rows[4]).getByText('Draw')).toBeTruthy()
   })
 
+  it('renders same-player market context cards without duplicate-key warnings', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const samePlayerResult: ComparisonResult = {
+      ...comparisonResult,
+      player_b: salahDetail,
+      market_context: {
+        value_a: 104_000_000,
+        value_b: 104_000_000,
+        league_avg_a: 22_000_000,
+        league_avg_b: 22_000_000,
+      },
+    }
+    mockedComparePlayers.mockResolvedValue(samePlayerResult)
+    renderCompare()
+
+    await selectPlayer('Player A', 'Salah', salahSummary)
+    await selectPlayer('Player B', 'Salah', salahSummary)
+    fireEvent.click(screen.getByRole('button', { name: /compare players/i }))
+    await flushPromises()
+
+    const marketSection = screen.getByRole('heading', { name: 'Market Context' }).closest('section')
+    expect(marketSection).not.toBeNull()
+    expect(within(marketSection as HTMLElement).getAllByText('Mohamed Salah')).toHaveLength(2)
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('Encountered two children with the same key'))
+
+    consoleErrorSpy.mockRestore()
+  })
+
   it('renders 404 and general error states, then retries', async () => {
     mockedComparePlayers
       .mockRejectedValueOnce(new ApiError('missing', 404))

@@ -42,11 +42,13 @@ function PlayerIdentity({ player, label }: { player: PlayerDetail, label: string
 function MarketContext({ result }: { result: ComparisonResult }) {
   const marketRows = [
     {
+      side: 'a',
       label: result.player_a.name,
       value: result.market_context.value_a,
       average: result.market_context.league_avg_a,
     },
     {
+      side: 'b',
       label: result.player_b.name,
       value: result.market_context.value_b,
       average: result.market_context.league_avg_b,
@@ -61,7 +63,7 @@ function MarketContext({ result }: { result: ComparisonResult }) {
       </p>
       <div className="market-grid">
         {marketRows.map((row) => (
-          <article className="market-card" key={row.label}>
+          <article className="market-card" key={row.side}>
             <h3>{row.label}</h3>
             <dl>
               <div>
