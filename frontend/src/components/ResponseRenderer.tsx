@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import {
   Bar,
   BarChart,
@@ -49,7 +50,8 @@ function formatCellValue(value: unknown): string {
 }
 
 function TableRenderer({ response }: { response: TableResponse }) {
-  const headingId = `table-${response.title.replace(/\s+/g, '-').toLowerCase()}`
+  const generatedId = useId()
+  const headingId = `table-${generatedId}`
 
   return (
     <section className="response-card" aria-labelledby={headingId}>
@@ -159,7 +161,8 @@ function ChartGraphic({ response }: { response: ChartResponse }) {
 }
 
 function ChartRenderer({ response }: { response: ChartResponse }) {
-  const headingId = `chart-${response.title.replace(/\s+/g, '-').toLowerCase()}`
+  const generatedId = useId()
+  const headingId = `chart-${generatedId}`
 
   return (
     <section className="response-card" aria-labelledby={headingId}>

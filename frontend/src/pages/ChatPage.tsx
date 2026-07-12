@@ -215,8 +215,8 @@ export default function ChatPage() {
             </div>
           </li>
         ))}
-        <div ref={bottomRef} />
       </ol>
+      <div ref={bottomRef} aria-hidden="true" />
 
       <form className="chat-input-form" onSubmit={handleSubmit}>
         <label className="search-label" htmlFor="chat-message">Ask a question</label>

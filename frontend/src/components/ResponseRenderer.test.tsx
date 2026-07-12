@@ -94,6 +94,25 @@ describe('ResponseRenderer table', () => {
 
     expect(screen.getByText('No results to display.')).toBeTruthy()
   })
+
+  it('uses unique heading IDs for repeated table titles', () => {
+    const response: TableResponse = {
+      type: 'table',
+      title: 'Repeated title',
+      columns: ['name'],
+      rows: [{ name: 'Mohamed Salah' }],
+    }
+
+    render(
+      <>
+        <ResponseRenderer response={response} />
+        <ResponseRenderer response={response} />
+      </>,
+    )
+
+    const ids = screen.getAllByRole('heading', { name: 'Repeated title' }).map((heading) => heading.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
 })
 
 describe('ResponseRenderer chart', () => {
@@ -128,6 +147,26 @@ describe('ResponseRenderer chart', () => {
 
     expect(screen.getByText('Malformed chart')).toBeTruthy()
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
+  it('uses unique heading IDs for repeated chart titles', () => {
+    const response: ChartResponse = {
+      type: 'chart',
+      title: 'Repeated chart',
+      chart_type: 'bar',
+      labels: ['Goals'],
+      datasets: [{ label: 'Mohamed Salah', data: [100] }],
+    }
+
+    render(
+      <>
+        <ResponseRenderer response={response} />
+        <ResponseRenderer response={response} />
+      </>,
+    )
+
+    const ids = screen.getAllByRole('heading', { name: 'Repeated chart' }).map((heading) => heading.id)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 })
 

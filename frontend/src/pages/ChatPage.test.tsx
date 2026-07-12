@@ -92,6 +92,18 @@ describe('ChatPage', () => {
     expect(screen.getByText('Which metric should I rank by?')).toBeTruthy()
   })
 
+  it('renders only list items as direct children of the chat history list', async () => {
+    mockedSendChatMessage.mockResolvedValue(textResponse)
+    render(<ChatPage />)
+
+    fireEvent.change(screen.getByLabelText('Ask a question'), { target: { value: 'Who is the best player?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await flushPromises()
+
+    const history = screen.getByRole('list', { name: 'Chat messages' })
+    expect(Array.from(history.children).every((child) => child.tagName.toLowerCase() === 'li')).toBe(true)
+  })
+
   it('Enter submits and Shift+Enter does not submit', () => {
     mockedSendChatMessage.mockResolvedValue(textResponse)
     render(<ChatPage />)
