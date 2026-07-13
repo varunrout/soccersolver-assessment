@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, GitCompareArrows } from 'lucide-react'
 import { ApiError, getPlayerProfile } from '../api/client'
 import MetricsChart from '../components/MetricsChart'
+import Badge from '../components/ui/Badge'
+import PlayerAvatar from '../components/ui/PlayerAvatar'
 import type { PlayerDetailWithPercentiles } from '../types/player'
 import { formatDecimal, formatInteger, formatMarketValue } from '../utils/formatters'
 
@@ -103,8 +106,7 @@ export default function ProfilePage() {
   return (
     <div className="page profile-page">
       <nav className="profile-actions" aria-label="Profile navigation">
-        <Link to="/">Back to Player Search</Link>
-        {routePlayerId ? <Link to={`/compare?playerA=${encodeURIComponent(routePlayerId)}`}>Compare this player</Link> : null}
+        <Link className="btn btn-quiet btn-link" to="/"><ArrowLeft size={17} aria-hidden="true" />Back to Player Search</Link>
       </nav>
 
       <div className="profile-live-region" aria-live="polite" aria-atomic="true">
@@ -115,19 +117,25 @@ export default function ProfilePage() {
 
       {status === 'success' && player ? (
         <>
-          <header className="profile-header">
+          <header className="profile-header surface surface--elevated">
+            <PlayerAvatar name={player.name} playerId={player.player_id} position={player.position} size="hero" />
             <div className="profile-header__identity">
-              <span className="profile-badge">{player.position}</span>
+              <span className="section-kicker">Player profile · 2021-22</span>
               <h1 className="page-title">{player.name}</h1>
               <p>
                 {player.club} {'\u00b7'} {player.league}
               </p>
+              <div className="profile-header__badges">
+                <Badge tone="accent">{player.position}</Badge>
+                <Badge><span>Age</span><strong>{player.age}</strong></Badge>
+              </div>
+              {routePlayerId ? (
+                <Link className="btn btn-primary btn-link profile-compare-action" to={`/compare?playerA=${encodeURIComponent(routePlayerId)}`}>
+                  <GitCompareArrows size={17} aria-hidden="true" />Compare player
+                </Link>
+              ) : null}
             </div>
             <dl className="profile-facts">
-              <div>
-                <dt>Age</dt>
-                <dd>{player.age}</dd>
-              </div>
               <div>
                 <dt>Estimated market value</dt>
                 <dd>{formatMarketValue(player.market_value_eur)}</dd>
@@ -135,8 +143,8 @@ export default function ProfilePage() {
             </dl>
           </header>
 
-          <section className="profile-section" aria-labelledby="season-stats-heading">
-            <h2 className="section-title" id="season-stats-heading">Season Statistics</h2>
+          <section className="profile-section surface" aria-labelledby="season-stats-heading">
+            <div className="section-heading"><div><span className="section-kicker">Season performance</span><h2 className="section-title" id="season-stats-heading">Season Statistics</h2></div><span className="section-heading__meta">League totals</span></div>
             <div className="stats-grid">
               {getCoreStats(player).map((stat) => (
                 <div className="stat-card" key={stat.label}>

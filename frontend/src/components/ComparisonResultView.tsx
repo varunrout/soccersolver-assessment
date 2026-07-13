@@ -2,11 +2,13 @@ import { Link } from 'react-router-dom'
 import type { ComparisonResult, PlayerDetail } from '../types/player'
 import { formatMarketValue } from '../utils/formatters'
 import ComparisonChart from './ComparisonChart'
+import PlayerAvatar from './ui/PlayerAvatar'
 
 function PlayerIdentity({ player, label }: { player: PlayerDetail, label: string }) {
   return (
     <article className="comparison-player-card">
-      <span className="profile-badge">{label}</span>
+      <span className="comparison-player-card__label">{label}</span>
+      <PlayerAvatar name={player.name} playerId={player.player_id} position={player.position} size="large" />
       <h2><Link to={`/player/${player.player_id}`}>{player.name}</Link></h2>
       <p>{player.position} {'\u00b7'} {player.club} {'\u00b7'} {player.league}</p>
       <dl>
@@ -71,6 +73,7 @@ export default function ComparisonResultView({ result }: { result: ComparisonRes
     <>
       <section className="comparison-header-grid" aria-label="Selected player comparison">
         <PlayerIdentity player={result.player_a} label="Player A" />
+        <div className="versus-mark" aria-hidden="true">VS</div>
         <PlayerIdentity player={result.player_b} label="Player B" />
       </section>
       <ComparisonChart result={result} />

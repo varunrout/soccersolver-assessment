@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { searchPlayers } from '../api/client'
 import type { PlayerSummary } from '../types/player'
 import { formatMarketValue } from '../utils/formatters'
+import PlayerAvatar from './ui/PlayerAvatar'
 
 interface Props {
   label: string
@@ -133,9 +134,11 @@ export default function PlayerSelector({ label, selectedPlayer, onSelect }: Prop
 
       {selectedPlayer ? (
         <div className="selected-player">
-          <strong>{selectedPlayer.name}</strong>
-          <span>{selectedPlayer.position} · {selectedPlayer.club} · {selectedPlayer.league}</span>
-          <span>Estimated market value {formatMarketValue(selectedPlayer.market_value_eur)}</span>
+          <PlayerAvatar name={selectedPlayer.name} playerId={selectedPlayer.player_id} position={selectedPlayer.position} size="medium" />
+          <div className="selected-player__copy"><strong>{selectedPlayer.name}</strong>
+            <span>{selectedPlayer.position} · {selectedPlayer.club} · {selectedPlayer.league}</span>
+            <span>Estimated market value {formatMarketValue(selectedPlayer.market_value_eur)}</span>
+          </div>
         </div>
       ) : (
         <>
@@ -168,8 +171,10 @@ export default function PlayerSelector({ label, selectedPlayer, onSelect }: Prop
           {results.map((player) => (
             <li key={player.player_id}>
               <button type="button" onClick={() => handleSelect(player)}>
-                <strong>{player.name}</strong>
-                <span>{player.position} · {player.club} · {player.league}</span>
+                <PlayerAvatar name={player.name} playerId={player.player_id} size="small" />
+                <span className="selector-result__copy"><strong>{player.name}</strong>
+                  <span>{player.position} · {player.club} · {player.league}</span>
+                </span>
               </button>
             </li>
           ))}

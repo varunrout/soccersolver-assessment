@@ -25,7 +25,7 @@ load_dotenv(_BACKEND_DIR / ".env")
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import chat, compare, profile, search
+from routers import chat, compare, player_images, profile, search
 
 app = FastAPI(
     title="SoccerSolver API",
@@ -55,6 +55,7 @@ app.add_middleware(
 # be matched by profile's /{player_id} path parameter.
 app.include_router(search.router,  prefix="/players", tags=["Players"])
 app.include_router(compare.router, prefix="/players", tags=["Players"])
+app.include_router(player_images.router, prefix="/players", tags=["Players"])
 app.include_router(profile.router, prefix="/players", tags=["Players"])
 app.include_router(chat.router,    prefix="/chat",    tags=["Chat"])
 

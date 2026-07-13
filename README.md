@@ -22,6 +22,7 @@ This project is an assessment implementation, not a live production scouting pla
 
 ### Profile
 - Player identity and season totals
+- Optional provider-backed player portrait with deterministic initials fallback
 - Goals, assists, minutes, shots, passes, xG and xA
 - Contextual percentiles against same-position and same-league peers
 - Graceful fallback when percentile context is unavailable
@@ -105,6 +106,25 @@ types/
 utils/
     shared formatting
 ```
+
+### Optional player imagery
+Player portraits are presentation-only enrichment and do not change player or
+statistics response contracts. The frontend requests a portrait from
+`GET /players/{player_id}/image`; the backend resolves the known player identity
+and, when configured, calls a provider with `player_name`, `club`, and `league`
+query parameters. The provider response may contain either `image_url` or `url`.
+
+The integration is intentionally fallback-first:
+- No provider is configured by default, and the UI renders deterministic initials.
+- Provider credentials remain on the backend and are never added to the Vite bundle.
+- Only absolute `http` and `https` image URLs are accepted.
+- Provider calls have a three-second timeout and do not retry.
+- Lookup failures, invalid responses and broken images fall back without affecting core views.
+- Successful lookups are cached in process for 24 hours; missing images are cached for five minutes.
+
+Production deployments are responsible for selecting a provider and ensuring
+that portrait retrieval and display comply with the provider's terms and image
+licensing requirements. No live image provider is bundled or required.
 
 ### Mermaid overview
 ```mermaid
@@ -315,6 +335,9 @@ Backend:
 ```env
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+PLAYER_IMAGE_PROVIDER=
+PLAYER_IMAGE_API_KEY=
+PLAYER_IMAGE_API_BASE_URL=
 ```
 
 Frontend:
@@ -325,6 +348,10 @@ VITE_API_BASE_URL=http://localhost:8000
 Notes:
 - OpenAI parsing is optional.
 - Without an API key, the rule-based parser remains active.
+- Player imagery is optional. Set `PLAYER_IMAGE_PROVIDER=http` and provide the
+  provider endpoint in `PLAYER_IMAGE_API_BASE_URL` to enable it.
+- `PLAYER_IMAGE_API_KEY` is sent to the configured provider as a bearer token.
+- Leaving the image variables blank preserves all functionality with initials fallbacks.
 - Do not put secrets in frontend variables.
 - Never commit a populated .env file.
 
@@ -353,6 +380,14 @@ Purpose:
 
 Responses:
 - 200: PlayerDetailWithPercentiles
+- 404: unknown player ID
+
+### GET /players/{player_id}/image
+Purpose:
+- Resolve an optional, presentation-only player portrait URL.
+
+Responses:
+- 200: player ID and nullable image URL
 - 404: unknown player ID
 
 ### GET /players/compare?player_a_id=<id>&player_b_id=<id>
@@ -429,14 +464,14 @@ npm run build
 ```
 
 Latest observed results on this branch:
-- Backend: 416 passed, 0 failed, 1 deprecation warning from dependency test client integration
-- Frontend tests: 65 passed, 0 failed
+- Backend: 430 passed, 0 failed, 1 deprecation warning from dependency test client integration
+- Frontend tests: 69 passed, 0 failed
 - Frontend build: success
 - Built assets:
   - dist/index.html 0.47 kB (gzip 0.30 kB)
-  - dist/assets/index-BaK7-IPB.css 13.02 kB (gzip 2.90 kB)
-  - dist/assets/index-DxS_8zi7.js 261.80 kB (gzip 81.53 kB)
-  - dist/assets/ChartGraphic-BfKcQNlz.js 407.24 kB (gzip 113.78 kB)
+  - dist/assets/index-BgnPpGp1.css 29.10 kB (gzip 5.88 kB)
+  - dist/assets/index-Dfz0QGl3.js 272.56 kB (gzip 84.86 kB)
+  - dist/assets/ChartGraphic-ku52RMI2.js 407.37 kB (gzip 113.82 kB)
 
 Coverage areas validated by tests:
 
@@ -462,6 +497,7 @@ Frontend:
 - Stale-response prevention
 - Accessibility behavior
 - Error and retry states
+- Player portrait and deterministic initials fallback behavior
 
 Docker verification performed:
 - docker-compose down --remove-orphans

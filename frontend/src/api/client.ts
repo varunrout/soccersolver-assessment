@@ -8,6 +8,7 @@ type ErrorPayload = {
   message?: unknown
 }
 
+
 export class ApiError extends Error {
   status: number
 

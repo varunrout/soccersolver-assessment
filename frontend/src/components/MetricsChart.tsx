@@ -15,6 +15,13 @@ type PercentileMetric = {
   value: number
 }
 
+function getPercentileBand(value: number) {
+  if (value >= 90) return 'Elite'
+  if (value >= 75) return 'Above average'
+  if (value >= 40) return 'Average'
+  return 'Below average'
+}
+
 interface Props {
   percentiles: PlayerPercentiles | null
 }
@@ -84,14 +91,17 @@ export default function MetricsChart({ percentiles }: Props) {
         {metrics.map((metric) => (
           <div className="percentile-row" key={metric.key}>
             <div className="percentile-row__header">
-              <span>{metric.label}</span>
-              <strong>{formatPercentile(metric.value)}</strong>
+              <div><span>{metric.label}</span><small>{getPercentileBand(metric.value)}</small></div>
+              <strong>{Math.round(metric.value)}<span>/100</span></strong>
             </div>
             <div
               className="percentile-bar"
               role="img"
               aria-label={`${metric.label}: ${formatPercentile(metric.value)}`}
             >
+              <span className="percentile-marker percentile-marker--25" aria-hidden="true" />
+              <span className="percentile-marker percentile-marker--50" aria-hidden="true" />
+              <span className="percentile-marker percentile-marker--75" aria-hidden="true" />
               <span className="percentile-bar__fill" style={{ width: `${metric.value}%` }} />
             </div>
           </div>
