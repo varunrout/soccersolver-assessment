@@ -22,6 +22,7 @@ This project is an assessment implementation, not a live production scouting pla
 
 ### Profile
 - Player identity and season totals
+- Optional provider-backed player portrait with deterministic initials fallback
 - Goals, assists, minutes, shots, passes, xG and xA
 - Contextual percentiles against same-position and same-league peers
 - Graceful fallback when percentile context is unavailable
@@ -105,6 +106,47 @@ types/
 utils/
     shared formatting
 ```
+
+### Optional player imagery
+Player portraits are presentation-only enrichment and do not change player or
+statistics response contracts. The frontend requests a portrait from
+`GET /players/{player_id}/image`; the backend resolves the known player identity
+and, when configured, calls a provider through a backend-only adapter.
+
+The repository now includes a concrete **Sportmonks** adapter based on the
+official Football API documentation:
+- Search endpoint: `GET https://api.sportmonks.com/v3/football/players/search/{search_query}`
+- Authentication: `Authorization: YOUR_TOKEN` header or `api_token` query parameter
+- Player image field: `image_path`
+- Disambiguation context used by this repository: exact normalized player name,
+  team include data, and league-country matching
+- Documented rate limits: per-entity hourly limits by plan, with `429 Too Many Requests`
+  when the player-entity budget is exhausted
+
+For deterministic matching, the adapter only accepts exact normalized name
+matches and then prefers a matching club and matching league-country context.
+If the remaining candidates are still ambiguous, it returns `None` and the UI
+keeps the initials fallback.
+
+The integration is intentionally fallback-first:
+- No provider is configured by default, and the UI renders deterministic initials.
+- Provider credentials remain on the backend and are never added to the Vite bundle.
+- Only absolute `http` and `https` image URLs are accepted.
+- Provider calls have a three-second timeout and do not retry.
+- Lookup failures, invalid responses and broken images fall back without affecting core views.
+- Successful lookups are cached in process for 24 hours; missing images are cached for five minutes.
+- Search-result avatar requests are deferred until cards are near the viewport,
+  which reduces one-request-per-card fan-out without blocking the initial render.
+
+Sportmonks' official terms also state that logos and profile photos remain
+copyrighted by their legal owners and that developers must arrange proof of
+intellectual-property rights themselves before displaying them. This repository
+therefore treats the adapter as technically integrated but still requires the
+deploying team to confirm image-display rights for its use case.
+
+No API key is committed here. If credentials are unavailable, the adapter is
+verified with mocks only and the product should not claim that real player faces
+are fully enabled in the current environment.
 
 ### Mermaid overview
 ```mermaid
@@ -315,6 +357,9 @@ Backend:
 ```env
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+PLAYER_IMAGE_PROVIDER=sportmonks
+PLAYER_IMAGE_API_KEY=
+PLAYER_IMAGE_API_BASE_URL=
 ```
 
 Frontend:
@@ -325,7 +370,16 @@ VITE_API_BASE_URL=http://localhost:8000
 Notes:
 - OpenAI parsing is optional.
 - Without an API key, the rule-based parser remains active.
+- Player imagery is optional. Set `PLAYER_IMAGE_PROVIDER=sportmonks` to use the
+  documented Sportmonks adapter.
+- `PLAYER_IMAGE_API_KEY` is sent only from the backend to the configured provider.
+- `PLAYER_IMAGE_API_BASE_URL` is only needed when using the generic `http` adapter.
+- The Sportmonks adapter uses exact normalized name matching and then prefers club
+  and league-country matches before accepting an image.
+- Leaving the image variables blank preserves all functionality with initials fallbacks.
 - Do not put secrets in frontend variables.
+- Sportmonks' terms require you to arrange your own rights clearance before displaying
+  logos or player profile photos in production.
 - Never commit a populated .env file.
 
 ## API endpoints
@@ -353,6 +407,14 @@ Purpose:
 
 Responses:
 - 200: PlayerDetailWithPercentiles
+- 404: unknown player ID
+
+### GET /players/{player_id}/image
+Purpose:
+- Resolve an optional, presentation-only player portrait URL.
+
+Responses:
+- 200: player ID and nullable image URL
 - 404: unknown player ID
 
 ### GET /players/compare?player_a_id=<id>&player_b_id=<id>
@@ -429,14 +491,14 @@ npm run build
 ```
 
 Latest observed results on this branch:
-- Backend: 416 passed, 0 failed, 1 deprecation warning from dependency test client integration
-- Frontend tests: 65 passed, 0 failed
+- Backend: 443 passed, 0 failed, 1 deprecation warning from dependency test client integration
+- Frontend tests: 70 passed, 0 failed
 - Frontend build: success
 - Built assets:
   - dist/index.html 0.47 kB (gzip 0.30 kB)
-  - dist/assets/index-BaK7-IPB.css 13.02 kB (gzip 2.90 kB)
-  - dist/assets/index-DxS_8zi7.js 261.80 kB (gzip 81.53 kB)
-  - dist/assets/ChartGraphic-BfKcQNlz.js 407.24 kB (gzip 113.78 kB)
+  - dist/assets/index-BgnPpGp1.css 29.10 kB (gzip 5.88 kB)
+  - dist/assets/index-2DJKb65B.js 273.02 kB (gzip 84.98 kB)
+  - dist/assets/ChartGraphic-5cHdwCsN.js 407.37 kB (gzip 113.82 kB)
 
 Coverage areas validated by tests:
 
@@ -458,17 +520,20 @@ Frontend:
 - Comparison
 - Chat
 - Dynamic response rendering
+- Concrete Sportmonks provider adapter matching and failure handling
 - Request cancellation
 - Stale-response prevention
 - Accessibility behavior
 - Error and retry states
+- Player portrait and deterministic initials fallback behavior
 
 Docker verification performed:
-- docker-compose down --remove-orphans
-- docker-compose build --no-cache
-- docker-compose up (and up --build)
-- Health endpoint returned 200
-- Frontend loaded and returned 200 on direct routes
+- `docker-compose up -d --build` completed successfully after the Sportmonks adapter update
+- Health endpoint returned `200` with `{"status": "ok"}`
+- Search endpoint still resolved `Mohamed Salah` from the rebuilt stack
+- `GET /players/{player_id}/image` returned `image_url: null` when no provider token was configured
+- Search, direct profile, compare and chat routes rendered successfully through nginx
+- Initials fallback remained active in the live UI when credentials were unavailable
 
 ## Project structure
 ```text

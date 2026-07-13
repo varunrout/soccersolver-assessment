@@ -11,6 +11,9 @@ services:
       # Optional: set in a root .env file or pass on the command line
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      PLAYER_IMAGE_PROVIDER: ${PLAYER_IMAGE_PROVIDER:-}
+      PLAYER_IMAGE_API_KEY: ${PLAYER_IMAGE_API_KEY:-}
+      PLAYER_IMAGE_API_BASE_URL: ${PLAYER_IMAGE_API_BASE_URL:-}
       CSV_PATH: /app/backend/data/players.csv
     healthcheck:
       test: ["CMD", "python", "-c",

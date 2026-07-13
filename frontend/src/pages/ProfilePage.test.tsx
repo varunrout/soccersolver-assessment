@@ -14,6 +14,10 @@ vi.mock('../api/client', async (importOriginal) => {
   }
 })
 
+vi.mock('../api/playerImages', () => ({
+  getPlayerImage: vi.fn().mockResolvedValue({ player_id: '', image_url: null }),
+}))
+
 const mockedGetPlayerProfile = vi.mocked(getPlayerProfile)
 
 const salah: PlayerDetailWithPercentiles = {

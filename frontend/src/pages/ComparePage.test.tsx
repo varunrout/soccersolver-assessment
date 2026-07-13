@@ -16,6 +16,10 @@ vi.mock('../api/client', async (importOriginal) => {
   }
 })
 
+vi.mock('../api/playerImages', () => ({
+  getPlayerImage: vi.fn().mockResolvedValue({ player_id: '', image_url: null }),
+}))
+
 const mockedSearchPlayers = vi.mocked(searchPlayers)
 const mockedComparePlayers = vi.mocked(comparePlayers)
 const mockedGetPlayerProfile = vi.mocked(getPlayerProfile)

@@ -1,9 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import PlayerCard from './PlayerCard'
 import type { PlayerSummary } from '../types/player'
 import { formatMarketValue } from '../utils/formatters'
+
+vi.mock('../api/playerImages', () => ({
+  getPlayerImage: vi.fn().mockResolvedValue({ player_id: '', image_url: null }),
+}))
 
 const player: PlayerSummary = {
   player_id: 'mo-salah',

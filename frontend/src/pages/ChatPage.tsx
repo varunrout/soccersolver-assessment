@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { Bot, CornerDownLeft, Search, Sparkles, UserRound, UsersRound } from 'lucide-react'
 import { sendChatMessage } from '../api/client'
 import ResponseRenderer from '../components/ResponseRenderer'
+import PageHeader from '../components/ui/PageHeader'
 import type { ResponseUnion } from '../types/chat'
 
 type ChatMessage =
@@ -19,10 +21,10 @@ type ChatMessage =
 
 const MAX_MESSAGE_LENGTH = 1000
 const EXAMPLE_PROMPTS = [
-  'Top 5 forwards in the Premier League by goals',
-  'Show me Mohamed Salah',
-  'Compare Mohamed Salah and Harry Kane',
-  'Who is the best player?',
+  { text: 'Top 5 forwards in the Premier League by goals', label: 'Rank players', icon: Sparkles },
+  { text: 'Show me Mohamed Salah', label: 'Player profile', icon: Search },
+  { text: 'Compare Mohamed Salah and Harry Kane', label: 'Compare players', icon: UsersRound },
+  { text: 'Who is the best player?', label: 'Ask broadly', icon: Bot },
 ]
 
 let messageCounter = 0
@@ -171,18 +173,16 @@ export default function ChatPage() {
 
   return (
     <div className="page chat-page">
-      <header className="chat-header">
-        <h1 className="page-title">Ask SoccerSolver</h1>
-        <p>Ask questions about player rankings, individual profiles and two-player comparisons.</p>
-      </header>
+      <PageHeader eyebrow="Structured football analysis" title="Ask SoccerSolver" description="Ask questions about player rankings, individual profiles and two-player comparisons." actions={<div className="assistant-identity"><span><Bot size={20} aria-hidden="true" /></span><div><strong>Analysis assistant</strong><small>Dataset grounded</small></div></div>} />
 
       {messages.length === 0 ? (
         <section className="chat-empty-state" aria-label="Example prompts">
-          <p>Try one of these prompts:</p>
-          <div className="example-searches">
+          <div className="chat-empty-state__intro"><span className="empty-state__icon"><Sparkles size={20} aria-hidden="true" /></span><div><strong>Start an analysis</strong><p>Try one of these prompts:</p></div></div>
+          <div className="prompt-grid">
             {EXAMPLE_PROMPTS.map((prompt) => (
-              <button className="example-button" key={prompt} type="button" onClick={() => sendMessage(prompt)}>
-                {prompt}
+              <button className="example-button" key={prompt.text} type="button" onClick={() => sendMessage(prompt.text)}>
+                <span className="example-button__icon"><prompt.icon size={18} aria-hidden="true" /></span>
+                <span><strong>{prompt.label}</strong><small>{prompt.text}</small></span>
               </button>
             ))}
           </div>
@@ -192,7 +192,10 @@ export default function ChatPage() {
       <ol className="chat-history" aria-label="Chat messages" aria-live="polite">
         {messages.map((message) => (
           <li className={`chat-message chat-message--${message.role}`} key={message.id}>
-            <span className="chat-message__author">{message.role === 'user' ? 'You' : 'SoccerSolver'}</span>
+            <div className="chat-message__identity">
+              <span className="chat-message__avatar" aria-hidden="true">{message.role === 'user' ? <UserRound size={16} /> : <Bot size={16} />}</span>
+              <span className="chat-message__author">{message.role === 'user' ? 'You' : 'SoccerSolver'}</span>
+            </div>
             <div className={`chat-bubble chat-bubble--${message.role}`}>
               {message.role === 'user' ? (
                 <p>{message.text}</p>
@@ -235,6 +238,7 @@ export default function ChatPage() {
         <div className="chat-input-actions">
           <span className="search-help">{remainingCharacters} characters remaining</span>
           <button className="btn btn-primary" disabled={isLoading || !input.trim()} type="submit">
+            <CornerDownLeft size={17} aria-hidden="true" />
             Send
           </button>
         </div>

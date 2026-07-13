@@ -32,6 +32,11 @@ class PlayerSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PlayerImageResponse(BaseModel):
+    player_id: str
+    image_url: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Full profile
 # ---------------------------------------------------------------------------

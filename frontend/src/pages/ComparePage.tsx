@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { GitCompareArrows } from 'lucide-react'
 import { ApiError, comparePlayers, getPlayerProfile } from '../api/client'
 import ComparisonResultView from '../components/ComparisonResultView'
 import PlayerSelector from '../components/PlayerSelector'
 import type { ComparisonResult, PlayerDetail, PlayerSummary } from '../types/player'
+import PageHeader from '../components/ui/PageHeader'
 
 type CompareStatus = 'idle' | 'loading' | 'success' | 'not-found' | 'error'
 
@@ -143,10 +145,7 @@ export default function ComparePage() {
 
   return (
     <div className="page compare-page">
-      <header className="compare-header">
-        <h1 className="page-title">Compare Players</h1>
-        <p>Select two players to compare their per-90 performance and market context.</p>
-      </header>
+      <PageHeader eyebrow="Head-to-head analysis" title="Compare Players" description="Select two players to compare their per-90 performance and market context." />
 
       <form className="compare-builder" onSubmit={handleSubmit}>
         <div className="selector-grid">
@@ -156,6 +155,7 @@ export default function ComparePage() {
 
         <div className="compare-submit-row">
           <button className="btn btn-primary" type="submit" disabled={!canCompare || status === 'loading'}>
+            <GitCompareArrows size={17} aria-hidden="true" />
             Compare players
           </button>
           {!canCompare ? <p className="search-help">Select both players to enable comparison.</p> : null}

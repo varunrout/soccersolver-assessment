@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Search, Sparkles, Users } from 'lucide-react'
 import { searchPlayers } from '../api/client'
 import PlayerCard from '../components/PlayerCard'
+import PageHeader from '../components/ui/PageHeader'
+import Surface from '../components/ui/Surface'
 import type { PlayerSummary } from '../types/player'
 
 type SearchStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -140,14 +143,18 @@ export default function SearchPage() {
 
   return (
     <div className="page search-page">
-      <div className="search-header">
-        <h1 className="page-title">Player Search</h1>
-        <p className="search-intro">Search more than 2,400 players across Europe's Big Five leagues.</p>
-      </div>
+      <PageHeader
+        className="search-header"
+        eyebrow="Big Five leagues · 2021-22"
+        title="Player Search"
+        description="Search more than 2,400 players across Europe's Big Five leagues."
+        actions={<div className="dataset-pill"><Users size={16} aria-hidden="true" /><strong>2,442</strong><span>players</span></div>}
+      />
 
-      <form className="search-form" onSubmit={handleSearch}>
+      <form className="search-form surface surface--elevated" onSubmit={handleSearch}>
         <label className="search-label" htmlFor="player-search">Search players</label>
         <div className="search-controls">
+          <Search className="search-controls__icon" size={21} aria-hidden="true" />
           <input
             id="player-search"
             className="search-input"
@@ -158,6 +165,7 @@ export default function SearchPage() {
             aria-describedby="player-search-help"
           />
           <button className="btn btn-primary" type="submit" disabled={!canSearch || status === 'loading'}>
+            <Search size={17} aria-hidden="true" />
             Search
           </button>
         </div>
@@ -170,20 +178,25 @@ export default function SearchPage() {
       </div>
 
       {showInitialState ? (
-        <section className="search-empty-panel" aria-label="Search suggestions">
-          <p>Try a player name to start exploring the dataset.</p>
+        <Surface className="search-empty-panel" aria-label="Search suggestions">
+          <div className="empty-state__icon" aria-hidden="true"><Sparkles size={20} /></div>
+          <div>
+            <strong>Start with a player you know</strong>
+            <p>Try a player name to start exploring the dataset.</p>
+          </div>
           <div className="example-searches" aria-label="Example searches">
             {EXAMPLE_SEARCHES.map((example) => (
-              <span key={example}>{example}</span>
+              <button key={example} type="button" onClick={() => setQuery(example)}>{example}</button>
             ))}
           </div>
-        </section>
+        </Surface>
       ) : null}
 
       {status === 'loading' ? (
         <div className="card-grid" aria-label="Loading player results">
           {[0, 1, 2].map((item) => (
-            <div className="player-card player-card--loading" key={item}>
+            <div className="player-card player-card--loading" key={item} aria-hidden="true">
+              <span className="skeleton skeleton-avatar" />
               <span className="skeleton skeleton-title">Loading player result</span>
               <span className="skeleton skeleton-line" />
               <span className="skeleton skeleton-line skeleton-line--short" />
@@ -194,7 +207,9 @@ export default function SearchPage() {
 
       {showResults ? (
         <>
-          <p className="result-summary">{resultSummary}</p>
+          <div className="result-heading">
+            <div><span className="section-kicker">Search results</span><h2>{resultSummary}</h2></div>
+          </div>
           <div className="card-grid">
             {results.map((player) => (
               <PlayerCard key={player.player_id} player={player} />
@@ -204,15 +219,16 @@ export default function SearchPage() {
       ) : null}
 
       {showEmptyState ? (
-        <section className="search-empty-panel" aria-live="polite">
-          <p>No players found for "{submittedQuery}".</p>
+        <section className="search-empty-panel empty-state" aria-live="polite">
+          <div className="empty-state__icon" aria-hidden="true"><Search size={20} /></div>
+          <strong>No players found for "{submittedQuery}".</strong>
           <p>Try checking the spelling or using the player's full name.</p>
         </section>
       ) : null}
 
       {status === 'error' ? (
         <section className="search-error" role="alert">
-          <p>We couldn't search for players right now. Please try again.</p>
+          <div><strong>Search is temporarily unavailable</strong><p>We couldn't search for players right now. Please try again.</p></div>
           <button className="btn btn-primary" type="button" onClick={handleRetry}>
             Retry
           </button>
