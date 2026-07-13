@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getPlayerImage } from '../../api/playerImages'
 import Badge from './Badge'
 
@@ -30,14 +30,52 @@ export default function PlayerAvatar({
   size = 'medium',
   className = '',
 }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(imageUrl)
   const [imageFailed, setImageFailed] = useState(false)
+  const [shouldLoadRemoteImage, setShouldLoadRemoteImage] = useState(() => (
+    Boolean(imageUrl) || !playerId || typeof IntersectionObserver === 'undefined'
+  ))
+
+  useEffect(() => {
+    if (imageUrl || !playerId || typeof IntersectionObserver === 'undefined') {
+      setShouldLoadRemoteImage(true)
+      return
+    }
+
+    setShouldLoadRemoteImage(false)
+  }, [imageUrl, playerId])
+
+  useEffect(() => {
+    if (shouldLoadRemoteImage || imageUrl || !playerId || typeof IntersectionObserver === 'undefined') {
+      return
+    }
+
+    const node = containerRef.current
+    if (!node) {
+      setShouldLoadRemoteImage(true)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoadRemoteImage(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(node)
+
+    return () => observer.disconnect()
+  }, [imageUrl, playerId, shouldLoadRemoteImage])
 
   useEffect(() => {
     setResolvedUrl(imageUrl)
     setImageFailed(false)
 
-    if (imageUrl || !playerId) return
+    if (imageUrl || !playerId || !shouldLoadRemoteImage) return
 
     const controller = new AbortController()
     getPlayerImage(playerId, controller.signal)
@@ -45,12 +83,12 @@ export default function PlayerAvatar({
       .catch(() => setResolvedUrl(null))
 
     return () => controller.abort()
-  }, [imageUrl, playerId])
+  }, [imageUrl, playerId, shouldLoadRemoteImage])
 
   const showImage = Boolean(resolvedUrl) && !imageFailed
 
   return (
-    <div className={`player-avatar player-avatar--${size} player-avatar--tone-${avatarTone(name)} ${className}`.trim()}>
+    <div ref={containerRef} className={`player-avatar player-avatar--${size} player-avatar--tone-${avatarTone(name)} ${className}`.trim()}>
       {showImage ? (
         <img
           alt={`${name} player portrait`}

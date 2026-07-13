@@ -9,6 +9,10 @@ vi.mock('../api/client', () => ({
   searchPlayers: vi.fn(),
 }))
 
+vi.mock('../api/playerImages', () => ({
+  getPlayerImage: vi.fn().mockResolvedValue({ player_id: '', image_url: null }),
+}))
+
 const mockedSearchPlayers = vi.mocked(searchPlayers)
 
 const salah: PlayerSummary = {
