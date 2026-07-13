@@ -591,13 +591,13 @@ I used AI-assisted development tools as a productivity aid for boilerplate, UI s
 The conversational layer may optionally use an LLM for query understanding, but all computed outputs—including rankings, percentiles, per-90 values, player comparisons and market context—are produced deterministically by the backend data and service layers. The model does not invent player statistics or calculate final results directly.
 
 ## Submission checklist
-- [ ] Public GitHub repository
-- [ ] Docker Compose verified
-- [ ] Backend tests pass
-- [ ] Frontend tests pass
-- [ ] Production frontend build passes
-- [ ] README reviewed
-- [ ] .env.example present
+- [x] Public GitHub repository
+- [x] Docker Compose verified
+- [x] Backend tests pass
+- [x] Frontend tests pass
+- [x] Production frontend build passes
+- [x] README reviewed
+- [x] `.env.example` present
 - [ ] Demo video recorded
 - [ ] At least three live chat queries shown
 - [ ] One ambiguous or failed query shown

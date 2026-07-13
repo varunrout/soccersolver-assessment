@@ -10,6 +10,7 @@ services:
     environment:
       # Optional: set in a root .env file or pass on the command line
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       CSV_PATH: /app/backend/data/players.csv
     healthcheck:
       test: ["CMD", "python", "-c",
